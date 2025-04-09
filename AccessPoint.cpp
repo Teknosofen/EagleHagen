@@ -2,15 +2,24 @@
 
 AccessPoint::AccessPoint(const char* ssidName) : ssid(ssidName), server(80), number1(0), number2(0) {}
 
+
+#include "LogoBitmap.h" // Include the bitmap array
+
 void AccessPoint::begin() {
     WiFi.softAP(ssid); // Start open WiFi Access Point
     server.on("/", std::bind(&AccessPoint::handleRoot, this));
+    server.on("/logo.bmp", HTTP_GET, [this]() { // Serve the bitmap
+        server.sendHeader("Content-Type", "image/bmp");
+        server.send_P(200, "image/bmp", (char *)logoBitmap, logoBitmapSize);
+    });
     server.begin(); // Start the server
 }
+
 
 void AccessPoint::handleRoot() {
     String page = "<!DOCTYPE html><html><body>";
     page += "<h1>ESP8266 Dashboard</h1>";
+    page += "<img src=\"/logo.bmp\" alt=\"Logo\" style=\"width:100px;height:auto;\">";
     page += "<p>Number 1: <span id=\"num1\">" + String(number1) + "</span></p>";
     page += "<p>Number 2: <span id=\"num2\">" + String(number2) + "</span></p>";
     page += "<canvas id=\"graph\" width=\"400\" height=\"200\" style=\"border:1px solid #000;\"></canvas>";
@@ -53,3 +62,5 @@ void AccessPoint::updateGraph(float x1, float y1, float x2, float y2) {
     graphDataX2 += String(x2) + ",";
     graphDataY2 += String(y2) + ",";
 }
+
+
