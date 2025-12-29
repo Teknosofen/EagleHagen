@@ -53,7 +53,7 @@ pio device monitor
 
 #### Option A: Standalone WiFi Monitoring
 1. Power on ESP32
-2. Connect to WiFi AP: `MedAir_Monitor` (password: `co2monitor`)
+2. Connect to WiFi AP: `EAGLEHAGEN` (password: `co2monitor`)
 3. Open browser: `http://192.168.4.1`
 4. View real-time data, charts, and export data
 
@@ -92,21 +92,24 @@ ESP32_MedAir/
 ### TFT Display (170x320)
 ```
 ┌─────────────────────────────┐
-│ Örnhagens Monitor     WiFi● │  Header
+│   Ornhagen             ●    │  Header (25px, centered, WiFi)
 ├─────────────────────────────┤
-│  CO2 Waveform (scrolling)   │  Real-time
-│  ╱╲  ╱╲    ╱╲  ╱╲          │  waveform
+│  CO2 Waveform (scrolling)   │  Real-time waveform
+│  ╱╲  ╱╲    ╱╲  ╱╲          │  (130px, soft blue)
 ├─────────────────────────────┤
-│ EtCO2  FCO2                 │  Numeric
-│ 38mmHg  0mmHg    (no RR)    │  values
-│ O2      Volume               │  (with
-│ 21.0%   450mL                │  decimals)
+│ EtCO2  FCO2                 │  Numeric values
+│ 38mmHg  0mmHg    (no RR)    │  (100px, with
+│ O2      Volume               │   decimals and
+│ 21.0%   450mL                │   units)
 ├─────────────────────────────┤
-│ [●PUMP] [●OK] [○LEAK]       │  Status
-└─────────────────────────────┘  indicators
+│ [●PUMP] [●OK] [○LEAK]       │  Status indicators
+│ SSID: EAGLEHAGEN            │  (65px, network info)
+│ IP: 192.168.4.1             │
+└─────────────────────────────┘
 ```
 
 ### Web Interface
+- 🎨 Örnhagen logo branding (WebP, left of title)
 - 📊 Three real-time scrolling charts (CO2, O2, Volume)
 - 📈 Instant value displays
 - 🎛️ Control buttons (Start Pump, Zero Calibration)
@@ -131,7 +134,7 @@ ESP32_MedAir/
 
 ### WiFi Settings (main.cpp)
 ```cpp
-const char* WIFI_SSID = "MedAir_Monitor";
+const char* WIFI_SSID = "EAGLEHAGEN";
 const char* WIFI_PASSWORD = "co2monitor";
 const bool WIFI_AP_MODE = true;  // true = AP, false = Station
 ```

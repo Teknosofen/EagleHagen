@@ -121,28 +121,54 @@ void setFilterSize(uint8_t size);
 **Key Methods:**
 ```cpp
 bool begin();
+void showSplash(const char* title, const char* subtitle = nullptr);
+void clearScreen();
+void drawHeader(bool wifi_connected);
+void drawWaveform();
+void drawNumericValues(const CO2Data& data);
+void drawStatusIndicators(const CO2Data& data);
 void updateAll(const CO2Data& data);
 void addWaveformPoint(uint16_t co2_value);
 void setBacklight(uint8_t brightness);
 ```
 
-**Files:** `DisplayManager.h`, `DisplayManager.cpp` (header only provided)
+**Files:** `DisplayManager.h`, `DisplayManager.cpp`
 
 **Display Layout (170x320):**
 ```
 ┌─────────────────────────────┐
-│ Header: MedAir CO2          │  20px
+│   Ornhagen             ●    │  Header (25px)
+│                             │  Centered text, WiFi indicator
 ├─────────────────────────────┤
 │                             │
-│  CO2 Waveform (scrolling)   │  120px
+│  CO2 Waveform (scrolling)   │  Waveform (130px)
+│  Soft blue line with grid   │  8Hz sampling
 │                             │
 ├─────────────────────────────┤
-│ EtCO2  FiCO2  RR           │  60px
-│ O2%    Volume               │
+│ ┌──────────┐ ┌──────────┐  │
+│ │  EtCO2   │ │  FCO2    │  │  Values (100px)
+│ │  38.5    │ │   0.2    │  │  Color-coded by type
+│ └──────────┘ └──────────┘  │
+│ ┌──────────┐ ┌──────────┐  │
+│ │    O2    │ │  Volume  │  │
+│ │   21.0   │ │   450    │  │
+│ └──────────┘ └──────────┘  │
 ├─────────────────────────────┤
-│ [PUMP] [LEAK] [OCCLUSION]  │  40px
+│ [PUMP][LEAK][OCCL]          │  Status (65px)
+│ ────────────────            │  Network info
+│ SSID: EAGLEHAGEN            │
+│ IP: 192.168.4.1             │
 └─────────────────────────────┘
 ```
+
+**Design Features:**
+- Soft color palette (medical-grade appearance)
+- FreeSansBold font for header
+- Text-only splash screens (no bitmap logo)
+- Optimized layout: 25/130/100/65 pixel sections
+- Anti-flicker updates (only changed values)
+- Color-coded values (darker blue for CO2, lighter for O2/Volume)
+- Bright green WiFi indicator when connected
 
 ---
 
@@ -171,12 +197,14 @@ uint8_t getCommand();
 
 **Web Interface:**
 - Complete HTML, CSS, and JavaScript embedded in `getIndexHTML()`
+- Örnhagen logo (WebP format, 10KB embedded as base64)
 - No separate data/ folder or SPIFFS required
 - Chart.js loaded from CDN
 - Single-file deployment for simplicity
+- Professional branding with logo left of title
 
 **Endpoints:**
-- `GET /` - Web dashboard (HTML embedded in code)
+- `GET /` - Web dashboard (HTML + logo embedded in code)
 - `WS /ws` - WebSocket (real-time updates at 8 Hz)
 
 ---

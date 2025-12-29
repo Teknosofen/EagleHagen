@@ -520,17 +520,30 @@ public:
 ```cpp
 class DisplayManager {
 private:
-    TFT_eSPI tft;
-    WaveformBuffer& waveform;
+    TFT_eSPI _tft;
+    uint16_t _co2Buffer[SCREEN_WIDTH];
+    int _bufferIndex;
+    CO2Data _lastData;
     
 public:
-    void init();
+    bool begin();
+    void showSplash(const char* title, const char* subtitle = nullptr);
+    void clearScreen();
+    void drawHeader(bool wifi_connected);
     void drawWaveform();
-    void updateNumericValues(CO2Data& data);
-    void drawStatusIndicators(uint8_t status2);
-    void drawAlarmBox(const char* message);
+    void drawNumericValues(const CO2Data& data);
+    void drawStatusIndicators(const CO2Data& data);
+    void updateAll(const CO2Data& data);
+    void addWaveformPoint(uint16_t co2_value);
+    void setBacklight(uint8_t brightness);
 };
 ```
+
+**Display Layout (170x320):**
+- Header: 25px - "Ornhagen" centered, WiFi indicator (text-only, no logo bitmap)
+- Waveform: 130px - Soft blue CO2 trace with grid
+- Values: 100px - EtCO2, FCO2, O2, Volume (color-coded)
+- Status: 65px - Badges + network info (SSID: EAGLEHAGEN)
 
 #### 4. Web Server
 ```cpp
