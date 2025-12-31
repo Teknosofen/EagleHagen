@@ -3,6 +3,11 @@
 
 #include "DisplayManager.h"
 
+// Layout constants for status section
+static const uint8_t STATUS_SEPARATOR_Y = 24;
+static const uint8_t SSID_Y_OFFSET = 35;
+static const uint8_t IP_Y_OFFSET = 48;
+
 DisplayManager::DisplayManager()
     : _waveformIndex(0)
     , _waveformMin(0)
@@ -25,17 +30,20 @@ DisplayManager::DisplayManager()
     _prevValues.volume_ml = -1;
     _prevValues.status2 = 255;
     
+    // Initialize previous title
+    memset(_prevTitle, 0, sizeof(_prevTitle));
+    
     // Define layout zones (portrait orientation: 170x320)
     _layout.header_y = 0;
-    _layout.header_h = 25;
+    _layout.header_h = 30;  // Header section height
     
-    _layout.wave_y = 25;
-    _layout.wave_h = 130;   // Increased from 120 to 130
+    _layout.wave_y = 30;  // Waveform starts after header
+    _layout.wave_h = 135;  // Increased by 5 pixels (was 130)
     
-    _layout.values_y = 155;  // Adjusted for new waveform size
+    _layout.values_y = 165;  // Values moved DOWN by 5 pixels (was 160)
     _layout.values_h = 100;
     
-    _layout.status_y = 255;  // Adjusted for new values position
+    _layout.status_y = 265;  // Status moved DOWN by 5 pixels (was 260)
     _layout.status_h = 65;   // Reduced from 75 to 65
 }
 
@@ -56,7 +64,7 @@ bool DisplayManager::begin() {
 
 void DisplayManager::showSplash(const char* title, const char* subtitle) {
     _tft.fillScreen(TFT_LOGOBACKGROUND);
-    _tft.setTextColor(TFT_LOGOBLUE, TFT_LOGOBACKGROUND);
+    _tft.setTextColor(TFT_DARKERBLUE, TFT_LOGOBACKGROUND);
     _tft.setTextDatum(MC_DATUM);
     
     // Title with FreeSans font for better appearance
@@ -94,7 +102,7 @@ void DisplayManager::updateAll(const CO2Data& data) {
     }
     _lastUpdateTime = millis();
     
-    // Draw all sections
+    // Draw all sections (header only redraws if title changed)
     drawHeader("Ornhagen");
     updateWaveform(data);
     updateNumericValues(data);
@@ -193,7 +201,7 @@ void DisplayManager::updateStatusIndicators(const CO2Data& data) {
     drawStatusBadge(badge_spacing * 2 + 5, badge_y, "OCCL", !occlusion, TFT_GREENISH_TINT);
     
     // Thin separator line
-    _tft.drawFastHLine(5, y_start + 24, SCREEN_WIDTH - 10, TFT_MIDNIGHTBLUE);
+    _tft.drawFastHLine(5, y_start + STATUS_SEPARATOR_Y, SCREEN_WIDTH - 10, TFT_MIDNIGHTBLUE);
     
     // Network info with labels - very tight spacing
     _tft.setTextDatum(MC_DATUM);
@@ -204,7 +212,7 @@ void DisplayManager::updateStatusIndicators(const CO2Data& data) {
         char ssid_label[40];
         snprintf(ssid_label, sizeof(ssid_label), "SSID: %s", _ssid);
         _tft.setTextColor(TFT_DARKERBLUE, TFT_LOGOBACKGROUND);
-        _tft.drawString(ssid_label, SCREEN_WIDTH / 2, y_start + 35);
+        _tft.drawString(ssid_label, SCREEN_WIDTH / 2, y_start + SSID_Y_OFFSET);
     }
     
     // IP with label
@@ -212,7 +220,7 @@ void DisplayManager::updateStatusIndicators(const CO2Data& data) {
         char ip_label[30];
         snprintf(ip_label, sizeof(ip_label), "IP: %s", _ip);
         _tft.setTextColor(TFT_SLATEBLUE, TFT_LOGOBACKGROUND);
-        _tft.drawString(ip_label, SCREEN_WIDTH / 2, y_start + 48);
+        _tft.drawString(ip_label, SCREEN_WIDTH / 2, y_start + IP_Y_OFFSET);
     }
 }
 
@@ -251,6 +259,11 @@ void DisplayManager::setRefreshRate(uint16_t rate_ms) {
 // Private helper functions
 
 void DisplayManager::drawHeader(const char* title) {
+    // Only redraw if title has changed
+    if (strcmp(_prevTitle, title) == 0) {
+        return;  // Title unchanged, skip redraw to avoid flicker
+    }
+    
     // Clear header area with soft background
     _tft.fillRect(0, 0, SCREEN_WIDTH, _layout.header_h, TFT_LOGOBACKGROUND);
     
@@ -258,11 +271,15 @@ void DisplayManager::drawHeader(const char* title) {
     _tft.setTextColor(TFT_DEEPBLUE, TFT_LOGOBACKGROUND);
     _tft.setTextDatum(MC_DATUM);  // Middle Center
     _tft.setFreeFont(&FreeSansBold12pt7b);  // Use built-in smooth font
-    _tft.drawString(title, SCREEN_WIDTH / 2, _layout.header_h / 2 + 5);  // +5 for vertical centering
+    _tft.drawString(title, SCREEN_WIDTH / 2, 12);  // Y=12 for more compact header
     _tft.setTextFont(1);  // Reset to default font
     
     // Draw WiFi indicator (stronger green dot on right)
     _tft.fillCircle(SCREEN_WIDTH - 10, _layout.header_h / 2, 4, TFT_STRONGER_GREEN);
+    
+    // Save title for next comparison
+    strncpy(_prevTitle, title, sizeof(_prevTitle) - 1);
+    _prevTitle[sizeof(_prevTitle) - 1] = '\0';
 }
 
 void DisplayManager::plotWaveform() {

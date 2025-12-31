@@ -107,6 +107,9 @@ private:
         uint8_t status2;
     } _prevValues;
     
+    // Previous header title to avoid flicker
+    char _prevTitle[32];
+    
     // Drawing helper functions
     void drawHeader(const char* title);
     void drawWaveformArea();

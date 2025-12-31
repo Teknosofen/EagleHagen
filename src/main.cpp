@@ -69,7 +69,7 @@ void setup() {
         Serial.println("ERROR: Display initialization failed!");
         while(1) delay(1000);
     }
-    displayManager.showSplash("Ornhagen", "Initializing...");
+    displayManager.showSplash("Teknosofen", "Initializing...");
     delay(2000);
     
     // Initialize ADC Manager
@@ -88,7 +88,7 @@ void setup() {
     
     // Initialize MaCO2 communication
     Serial.println("Initializing MaCO2 communication...");
-    displayManager.showSplash("Ornhagen", "Connecting sensor...");
+    displayManager.showSplash("Teknosofen", "Connecting sensor...");
     SerialMaCO2.begin(9600, SERIAL_8N1, UART_RX_MACO2, UART_TX_MACO2);
     
     if (!maco2Parser.initialize(SerialMaCO2, 10000)) {
