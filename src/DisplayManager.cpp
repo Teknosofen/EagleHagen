@@ -29,6 +29,10 @@ DisplayManager::DisplayManager()
     _prevValues.o2_percent = -1;
     _prevValues.volume_ml = -1;
     _prevValues.status2 = 255;
+    memset(_prevValues.etco2_str, 0, sizeof(_prevValues.etco2_str));
+    memset(_prevValues.fco2_str, 0, sizeof(_prevValues.fco2_str));
+    memset(_prevValues.o2_str, 0, sizeof(_prevValues.o2_str));
+    memset(_prevValues.vol_str, 0, sizeof(_prevValues.vol_str));
     
     // Initialize previous title
     memset(_prevTitle, 0, sizeof(_prevTitle));
@@ -50,12 +54,18 @@ DisplayManager::DisplayManager()
 bool DisplayManager::begin() {
     Serial.println("Initializing TFT display...");
     
+    // Enable display power (GPIO 15 controls display power on T-Display S3)
+    pinMode(15, OUTPUT);
+    digitalWrite(15, HIGH);
+    delay(100);  // Wait for power to stabilize
+    
     _tft.init();
-    _tft.setRotation(0);  // Portrait mode
+    _tft.setRotation(2);  // Portrait mode (180° rotated)
     _tft.fillScreen(TFT_BLACK);
     
     // Set backlight
     pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);  // Turn on immediately
     setBacklight(_backlightBrightness);
     
     Serial.println("TFT display initialized");
@@ -110,21 +120,16 @@ void DisplayManager::updateAll(const CO2Data& data) {
 }
 
 void DisplayManager::updateWaveform(const CO2Data& data) {
-    // Only clear waveform area on first draw
-    static bool first_draw = true;
-    if (first_draw) {
-        _tft.fillRect(0, _layout.wave_y, SCREEN_WIDTH, _layout.wave_h, TFT_LOGOBACKGROUND);
-        
-        // Draw label in soft color
-        _tft.setTextColor(TFT_SLATEBLUE, TFT_LOGOBACKGROUND);
-        _tft.setTextDatum(BL_DATUM);
-        _tft.setTextSize(1);
-        _tft.drawString("CO2 Waveform", 5, _layout.wave_y + _layout.wave_h - 2);
-        
-        first_draw = false;
-    }
+    // Clear waveform area completely each time
+    _tft.fillRect(0, _layout.wave_y, SCREEN_WIDTH, _layout.wave_h, TFT_LOGOBACKGROUND);
     
-    // Draw waveform (this will draw over previous)
+    // Draw label
+    _tft.setTextColor(TFT_SLATEBLUE, TFT_LOGOBACKGROUND);
+    _tft.setTextDatum(BL_DATUM);
+    _tft.setTextSize(1);
+    _tft.drawString("CO2 Waveform", 5, _layout.wave_y + _layout.wave_h - 2);
+    
+    // Draw waveform
     plotWaveform();
 }
 
@@ -138,9 +143,13 @@ void DisplayManager::updateNumericValues(const CO2Data& data) {
     char o2_str[8];
     char vol_str[8];
     
+    // Convert CO2 values from mmHg to kPa (1 mmHg = 0.133322 kPa)
+    float etco2_kpa = (float)data.fetco2 * 0.133322;
+    float fco2_kpa = (float)data.fco2 * 0.133322;
+    
     // Convert values to strings with one decimal place for CO2
-    snprintf(etco2_str, sizeof(etco2_str), "%.1f", (float)data.fetco2);
-    snprintf(fco2_str, sizeof(fco2_str), "%.1f", (float)data.fco2);
+    snprintf(etco2_str, sizeof(etco2_str), "%.1f", etco2_kpa);
+    snprintf(fco2_str, sizeof(fco2_str), "%.1f", fco2_kpa);
     snprintf(o2_str, sizeof(o2_str), "%.1f", data.o2_percent);
     snprintf(vol_str, sizeof(vol_str), "%d", (int)data.volume_ml);
     
@@ -148,31 +157,35 @@ void DisplayManager::updateNumericValues(const CO2Data& data) {
     // Only update if value changed
     if (data.fetco2 != _prevValues.fetco2) {
         drawMetricBox(0, y_start, col_width, 50,
-                      "EtCO2", (const char*)etco2_str, "mmHg",
+                      "EtCO2", _prevValues.etco2_str, (const char*)etco2_str, "kPa",
                       TFT_DARKERBLUE);  // Darker blue for CO2
         _prevValues.fetco2 = data.fetco2;
+        strncpy(_prevValues.etco2_str, etco2_str, sizeof(_prevValues.etco2_str));
     }
     
     if (data.fco2 != _prevValues.fco2) {
         drawMetricBox(col_width, y_start, col_width, 50,
-                      "FCO2", (const char*)fco2_str, "mmHg",
+                      "FCO2", _prevValues.fco2_str, (const char*)fco2_str, "kPa",
                       TFT_DARKERBLUE);  // Darker blue for CO2
         _prevValues.fco2 = data.fco2;
+        strncpy(_prevValues.fco2_str, fco2_str, sizeof(_prevValues.fco2_str));
     }
     
     // Second row: O2, Volume
     if (abs(data.o2_percent - _prevValues.o2_percent) > 0.05) {  // Update if changed by > 0.05%
         drawMetricBox(0, y_start + 50, col_width, 50,
-                      "O2", (const char*)o2_str, "%",
+                      "O2", _prevValues.o2_str, (const char*)o2_str, "%",
                       TFT_SLATEBLUE);  // Slate blue for O2
         _prevValues.o2_percent = data.o2_percent;
+        strncpy(_prevValues.o2_str, o2_str, sizeof(_prevValues.o2_str));
     }
     
     if (abs(data.volume_ml - _prevValues.volume_ml) > 0.5) {  // Update if changed by > 0.5mL
         drawMetricBox(col_width, y_start + 50, col_width, 50,
-                      "Volume", (const char*)vol_str, "mL",
+                      "Volume", _prevValues.vol_str, (const char*)vol_str, "mL",
                       TFT_SLATEBLUE);  // Slate blue for Volume
         _prevValues.volume_ml = data.volume_ml;
+        strncpy(_prevValues.vol_str, vol_str, sizeof(_prevValues.vol_str));
     }
 }
 
@@ -288,7 +301,7 @@ void DisplayManager::plotWaveform() {
     const uint16_t wave_w = SCREEN_WIDTH - 10;
     const uint16_t wave_h = _layout.wave_h - 30;
     
-    // Draw grid lines in soft color
+    // Draw grid lines
     _tft.drawFastHLine(wave_x, wave_y + wave_h / 4, wave_w, TFT_MIDNIGHTBLUE);
     _tft.drawFastHLine(wave_x, wave_y + wave_h / 2, wave_w, TFT_MIDNIGHTBLUE);
     _tft.drawFastHLine(wave_x, wave_y + wave_h * 3 / 4, wave_w, TFT_MIDNIGHTBLUE);
@@ -297,28 +310,26 @@ void DisplayManager::plotWaveform() {
     uint16_t range = (_waveformMax - _waveformMin);
     if (range == 0) range = 1;
     
-    // Draw waveform in soft blue
-    uint16_t prev_x = wave_x;
-    uint16_t prev_y = wave_y + wave_h / 2;
-    
+    // Draw simple line graph
     for (int i = 1; i < WAVEFORM_BUFFER_SIZE; i++) {
         int idx = (_waveformIndex + i) % WAVEFORM_BUFFER_SIZE;
         int prev_idx = (_waveformIndex + i - 1) % WAVEFORM_BUFFER_SIZE;
         
         // Scale to screen coordinates
-        uint16_t x = wave_x + (i * wave_w / WAVEFORM_BUFFER_SIZE);
-        uint16_t y = wave_y + wave_h - 
+        uint16_t x1 = wave_x + ((i - 1) * wave_w / WAVEFORM_BUFFER_SIZE);
+        uint16_t x2 = wave_x + (i * wave_w / WAVEFORM_BUFFER_SIZE);
+        
+        uint16_t y1 = wave_y + wave_h - 
+                     ((_waveformBuffer[prev_idx] - _waveformMin) * wave_h / range);
+        uint16_t y2 = wave_y + wave_h - 
                      ((_waveformBuffer[idx] - _waveformMin) * wave_h / range);
         
         // Clamp to bounds
-        if (y < wave_y) y = wave_y;
-        if (y > wave_y + wave_h) y = wave_y + wave_h;
+        y1 = constrain(y1, wave_y, wave_y + wave_h);
+        y2 = constrain(y2, wave_y, wave_y + wave_h);
         
-        // Draw line segment in soft blue
-        _tft.drawLine(prev_x, prev_y, x, y, TFT_LOGOBLUE);
-        
-        prev_x = x;
-        prev_y = y;
+        // Draw single line segment
+        _tft.drawLine(x1, y1, x2, y2, TFT_DARKERBLUE);
     }
 }
 
@@ -343,8 +354,8 @@ void DisplayManager::updateWaveformScale() {
 }
 
 void DisplayManager::drawMetricBox(uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                                   const char* label, const char* value, const char* unit,
-                                   uint16_t color) {
+                                   const char* label, const char* old_value, const char* new_value,
+                                   const char* unit, uint16_t color) {
     // Draw border in soft color
     _tft.drawRect(x + 1, y + 1, w - 2, h - 2, TFT_MIDNIGHTBLUE);
     
@@ -354,11 +365,19 @@ void DisplayManager::drawMetricBox(uint16_t x, uint16_t y, uint16_t w, uint16_t 
     _tft.setTextSize(1);
     _tft.drawString(label, x + w / 2, y + 5);
     
-    // Value in provided soft color
+    // Erase old value by drawing it in background color
+    if (old_value && strlen(old_value) > 0) {
+        _tft.setTextColor(TFT_LOGOBACKGROUND, TFT_LOGOBACKGROUND);
+        _tft.setTextDatum(MC_DATUM);
+        _tft.setTextSize(2);
+        _tft.drawString(old_value, x + w / 2, y + h / 2 + 5);
+    }
+    
+    // Draw new value in provided color
     _tft.setTextColor(color, TFT_LOGOBACKGROUND);
     _tft.setTextDatum(MC_DATUM);
     _tft.setTextSize(2);
-    _tft.drawString(value, x + w / 2, y + h / 2 + 5);
+    _tft.drawString(new_value, x + w / 2, y + h / 2 + 5);
     
     // Unit in soft grey
     _tft.setTextColor(TFT_DARKERBLUE, TFT_LOGOBACKGROUND);

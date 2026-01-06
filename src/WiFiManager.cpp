@@ -500,13 +500,13 @@ String WiFiManager::getIndexHTML() {
             <div class="metric-card">
                 <div class="metric-label">End-Tidal CO₂</div>
                 <div class="metric-value" id="fetco2">--</div>
-                <div class="metric-unit">mmHg</div>
+                <div class="metric-unit">kPa</div>
             </div>
             
             <div class="metric-card">
                 <div class="metric-label">Fractional CO₂</div>
                 <div class="metric-value" id="fco2">--</div>
-                <div class="metric-unit">mmHg</div>
+                <div class="metric-unit">kPa</div>
             </div>
             
             <div class="metric-card">
@@ -655,8 +655,8 @@ String WiFiManager::getIndexHTML() {
         
         function updateDisplay(data) {
             // Update instant values
-            document.getElementById('fetco2').textContent = data.fetco2 || '--';
-            document.getElementById('fco2').textContent = data.fco2 || '--';
+            document.getElementById('fetco2').textContent = ((data.fetco2 || 0) * 0.133322).toFixed(1);
+            document.getElementById('fco2').textContent = ((data.fco2 || 0) * 0.133322).toFixed(1);
             document.getElementById('rr').textContent = data.rr || '--';
             document.getElementById('o2').textContent = data.o2_percent ? data.o2_percent.toFixed(1) : '--';
             document.getElementById('volume').textContent = data.volume_ml ? Math.round(data.volume_ml) : '--';
@@ -692,7 +692,7 @@ String WiFiManager::getIndexHTML() {
             });
             
             // Update chart data
-            co2Data.push(data.co2_waveform || 0);
+            co2Data.push((data.co2_waveform || 0) * 0.133322);  // Convert mmHg to kPa
             o2Data.push(data.o2_percent || 0);
             volumeData.push(data.volume_ml || 0);
             timeLabels.push(timeStr);
@@ -818,10 +818,10 @@ String WiFiManager::getIndexHTML() {
                             ...chartConfig.options.scales.y,
                             title: {
                                 display: true,
-                                text: 'CO₂ (mmHg)'
+                                text: 'CO₂ Waveform (kPa)'
                             },
                             suggestedMin: 0,
-                            suggestedMax: 60
+                            suggestedMax: 8
                         }
                     }
                 }

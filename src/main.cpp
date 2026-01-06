@@ -19,8 +19,8 @@ const char* WIFI_PASSWORD = "co2monitor";
 const bool WIFI_AP_MODE = true;  // true = Access Point, false = Station
 
 // Pin Definitions
-#define UART_RX_MACO2   44
-#define UART_TX_MACO2   43
+#define UART_RX_MACO2   18  // U1_RXD - Dedicated UART1 RX pin
+#define UART_TX_MACO2   17  // U1_TXD - Dedicated UART1 TX pin
 #define O2_SENSOR_PIN   1
 #define VOL_SENSOR_PIN  2
 
@@ -74,14 +74,23 @@ void setup() {
     
     // Initialize ADC Manager
     Serial.println("Initializing ADC...");
+    
+    // Configure volume sensor pin with weak pull-down
+    pinMode(VOL_SENSOR_PIN, INPUT);
+    gpio_pulldown_en((gpio_num_t)VOL_SENSOR_PIN);
+    gpio_pullup_dis((gpio_num_t)VOL_SENSOR_PIN);
+    
     if (!adcManager.begin()) {
         Serial.println("ERROR: ADC initialization failed!");
         while(1) delay(1000);
     }
     
+    // Set ADC filter size (moving average)
+    adcManager.setFilterSize(5);
+    
     // Set ADC calibration (adjust these for your sensors)
-    // O2 sensor: 0V = 0%, 3.3V = 100% (linear, example values)
-    adcManager.setO2Calibration(0.0, 3.3);
+    // O2 sensor: 0V = 0%, 1V = 100% (0-1V input range)
+    adcManager.setO2Calibration(0.0, 1.0);
     
     // Volume sensor: 200 mL per volt (example value)
     adcManager.setVolumeCalibration(200.0, 0.0);
