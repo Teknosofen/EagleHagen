@@ -209,7 +209,7 @@ void DisplayManager::updateStatusIndicators(const CO2Data& data) {
     const uint16_t badge_y = y_start + 1;  // Minimal top margin
     const uint16_t badge_spacing = SCREEN_WIDTH / 3;
     
-    drawStatusBadge(badge_spacing * 0 + 5, badge_y, "PUMP", pump_running, TFT_GREENISH_TINT);
+    drawStatusBadge(badge_spacing * 0 + 5, badge_y, "PUMP", !pump_running, TFT_GREENISH_TINT);
     drawStatusBadge(badge_spacing * 1 + 5, badge_y, "LEAK", !leak, TFT_GREENISH_TINT);
     drawStatusBadge(badge_spacing * 2 + 5, badge_y, "OCCL", !occlusion, TFT_GREENISH_TINT);
     

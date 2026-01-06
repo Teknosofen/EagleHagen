@@ -662,7 +662,7 @@ String WiFiManager::getIndexHTML() {
             document.getElementById('volume').textContent = data.volume_ml ? Math.round(data.volume_ml) : '--';
             
             // Update status indicators
-            updateStatus('pumpStatus', data.pump_running, 'Pump Running', 'Pump Stopped');
+            updateStatus('pumpStatus', !data.pump_running, 'Pump Stopped', 'Pump Running');
             updateStatus('leakStatus', !data.leak_detected, 'No Leak', 'Leak Detected');
             updateStatus('occlusionStatus', !data.occlusion_detected, 'No Occlusion', 'Occlusion Detected');
             

@@ -8,6 +8,7 @@
 #include "DisplayManager.h"
 #include "WiFiManager.h"
 #include "DataLogger.h"
+#include "Button.hpp"
 
 // ============================================================================
 // Configuration
@@ -23,6 +24,7 @@ const bool WIFI_AP_MODE = true;  // true = Access Point, false = Station
 #define UART_TX_MACO2   17  // U1_TXD - Dedicated UART1 TX pin
 #define O2_SENSOR_PIN   1
 #define VOL_SENSOR_PIN  2
+#define BUTTON_PIN      14  // IO14 - Pump start button
 
 // Update intervals
 #define DATA_UPDATE_INTERVAL_MS     125   // 8Hz data acquisition
@@ -41,6 +43,7 @@ ADCManager adcManager(O2_SENSOR_PIN, VOL_SENSOR_PIN);
 DisplayManager displayManager;
 WiFiManager wifiManager;
 DataLogger dataLogger;
+Button pumpButton(BUTTON_PIN, 1000, 50);  // IO14, 1000ms long press, 50ms debounce
 
 CO2Data currentData;
 
@@ -128,6 +131,11 @@ void setup() {
     dataLogger.begin();
     dataLogger.setLabViewEnabled(true);  // Enable LabVIEW output via USB CDC
     
+    // Initialize Pump Button
+    Serial.println("Initializing pump button...");
+    pumpButton.begin();
+    Serial.println("Button on IO14 ready - press to start pump");
+    
     // Show ready screen with IP
     char ipStr[32];
     snprintf(ipStr, sizeof(ipStr), "IP: %s", wifiManager.getIP().toString().c_str());
@@ -203,6 +211,13 @@ void loop() {
     // -------------------------------------------------------------------------
     // Handle Commands
     // -------------------------------------------------------------------------
+    
+    // Handle pump button press
+    pumpButton.update();
+    if (pumpButton.wasPressed()) {
+        Serial.println("Button pressed - sending pump start command");
+        maco2Parser.sendCommand(SerialMaCO2, CMD_START_PUMP);
+    }
     
     // Commands from web interface
     if (wifiManager.hasCommand()) {
