@@ -1,10 +1,11 @@
 // DataLogger.cpp
-// Implementation of data logging and LabVIEW interface
+// Implementation of data logging with multiple output formats
 
 #include "DataLogger.h"
 
 DataLogger::DataLogger()
-    : _labviewEnabled(true)
+    : _outputFormat(FORMAT_TAB_SEPARATED)
+    , _outputEnabled(true)
     , _csvEnabled(false)
     , _packetsSent(0)
     , _bytesSent(0)
@@ -13,25 +14,62 @@ DataLogger::DataLogger()
 
 bool DataLogger::begin() {
     Serial.println("DataLogger initialized");
+    Serial.println("Tab-separated ASCII output enabled (default)");
     return true;
 }
 
-void DataLogger::sendPICFormat(Stream& stream, const CO2Data& data) {
-    if (!_labviewEnabled) {
+void DataLogger::sendData(Stream& stream, const CO2Data& data) {
+    if (!_outputEnabled) {
         return;
     }
     
+    switch (_outputFormat) {
+        case FORMAT_LEGACY_LABVIEW:
+            sendPICFormat(stream, data);
+            break;
+        case FORMAT_TAB_SEPARATED:
+            sendTabSeparated(stream, data);
+            break;
+    }
+}
+
+void DataLogger::sendPICFormat(Stream& stream, const CO2Data& data) {
     char buffer[64];
     formatPICPacket(buffer, sizeof(buffer), data);
     
     size_t written = stream.print(buffer);
+    stream.flush();  // Ensure data is sent immediately
+    
     _bytesSent += written;
     _packetsSent++;
 }
 
-void DataLogger::setLabViewEnabled(bool enabled) {
-    _labviewEnabled = enabled;
-    Serial.printf("LabVIEW output %s\n", enabled ? "enabled" : "disabled");
+void DataLogger::sendTabSeparated(Stream& stream, const CO2Data& data) {
+    // New format: Tab-separated ASCII
+    // Status1<TAB>Status2<TAB>RR<TAB>FCO2<TAB>FetCO2<TAB>O2%<TAB>Volume_mL<CR><LF>
+
+    char buffer[96];
+    snprintf(buffer, sizeof(buffer),
+        "%d\t%d\t%d\t%d\t%d\t%.1f\t%.1f\r\n",
+        data.status1,
+        data.status2,
+        data.respiratory_rate,
+        data.co2_waveform,  // FCO2 curve (d[4])
+        data.fetco2,        // FetCO2 peak (d[5])
+        data.o2_percent,    // O2 percentage
+        data.volume_ml      // Volume in mL
+    );
+
+    size_t written = stream.print(buffer);
+    stream.flush();
+
+    _bytesSent += written;
+    _packetsSent++;
+}
+
+void DataLogger::setOutputEnabled(bool enabled) {
+    _outputEnabled = enabled;
+    Serial.printf("Host output %s\n", enabled ? "enabled" : "disabled");
 }
 
 void DataLogger::enableCSVLogging(bool enabled) {

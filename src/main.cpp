@@ -27,10 +27,10 @@ const bool WIFI_AP_MODE = true;  // true = Access Point, false = Station
 #define BUTTON_PIN      14  // IO14 - Pump start button
 
 // Update intervals
-#define DATA_UPDATE_INTERVAL_MS     125   // 8Hz data acquisition
+#define DATA_UPDATE_INTERVAL_MS     100   // 10Hz data acquisition (faster than sensor's 8Hz to prevent buffer buildup)
 #define DISPLAY_UPDATE_INTERVAL_MS  50    // 20Hz display refresh
-#define WIFI_UPDATE_INTERVAL_MS     125   // 8Hz web update (match data rate)
-#define LABVIEW_UPDATE_INTERVAL_MS  125   // 8Hz LabVIEW output
+#define WIFI_UPDATE_INTERVAL_MS     125   // 8Hz web update (match sensor nominal rate)
+#define LABVIEW_UPDATE_INTERVAL_MS  200   // 5Hz LabVIEW output (reduced to prevent timing issues)
 
 // ============================================================================
 // Global Objects
@@ -73,7 +73,7 @@ void setup() {
         while(1) delay(1000);
     }
     displayManager.showSplash("Teknosofen", "Initializing...");
-    delay(2000);
+    delay(1000);
     
     // Initialize ADC Manager
     Serial.println("Initializing ADC...");
@@ -129,7 +129,10 @@ void setup() {
     
     // Initialize Data Logger
     dataLogger.begin();
-    dataLogger.setLabViewEnabled(true);  // Enable LabVIEW output via USB CDC
+    
+    // Link DataLogger to WiFiManager (for format control)
+    wifiManager.setDataLogger(&dataLogger);
+    dataLogger.setOutputEnabled(true);  // Enable host output via USB CDC
     
     // Initialize Pump Button
     Serial.println("Initializing pump button...");
@@ -140,7 +143,7 @@ void setup() {
     char ipStr[32];
     snprintf(ipStr, sizeof(ipStr), "IP: %s", wifiManager.getIP().toString().c_str());
     displayManager.showSplash("Ready!", ipStr);
-    delay(3000);
+    delay(1000);
     
     // Clear screen and set network info for status display
     displayManager.clearScreen();
@@ -164,11 +167,11 @@ void loop() {
     unsigned long now = millis();
     
     // -------------------------------------------------------------------------
-    // Data Acquisition (10Hz)
+    // Data Acquisition (10Hz - faster than sensor to prevent buffer buildup)
     // -------------------------------------------------------------------------
     if (now - lastDataUpdate >= DATA_UPDATE_INTERVAL_MS) {
         lastDataUpdate = now;
-        
+
         // Parse MaCO2 data (non-blocking)
         if (maco2Parser.parsePacket(SerialMaCO2, currentData)) {
             // Got new data from sensor
@@ -198,13 +201,13 @@ void loop() {
     }
     
     // -------------------------------------------------------------------------
-    // LabVIEW Output (10Hz)
+    // Host Output (8Hz) - Legacy LabVIEW or Tab-Separated format
     // -------------------------------------------------------------------------
-    if (now - lastLabViewUpdate >= LABVIEW_UPDATE_INTERVAL_MS) {
+    if (now - lastLabViewUpdate >= DATA_UPDATE_INTERVAL_MS) {  // 8Hz same as data rate
         lastLabViewUpdate = now;
-        
+
         if (currentData.valid) {
-            dataLogger.sendPICFormat(Serial, currentData);
+            dataLogger.sendData(Serial, currentData);
         }
     }
     
@@ -237,7 +240,7 @@ void loop() {
     wifiManager.loop();
     
     // Small delay to prevent watchdog issues
-    delay(1);
+    // delay(1);
 }
 
 // ============================================================================

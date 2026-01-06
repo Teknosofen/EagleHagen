@@ -8,15 +8,33 @@
 #include <Arduino.h>
 
 // MaCO2 sensor raw packet structure (8 bytes)
+// FINAL STRUCTURE based on actual sensor data analysis with checksum validation
+//
+// Byte | Field      | Range     | Description
+// -----|------------|-----------|------------------------------------------
+// d[0] | status1    | 6         | Data valid flag (always 0x06 for valid data)
+// d[1] | status2    | 0-15      | Status byte 2 (pump, leak, occlusion bits)
+// d[2] | rr         | 0-60      | Respiratory Rate (breaths/min)
+// d[3] | fico2      | 0-3       | FiCO2 - Fractional Inspired CO2 (baseline)
+// d[4] | fco2_wave  | 0-32      | FCO2 - Real-time CO2 waveform (8Hz updates)
+// d[5] | fetco2     | 0-120     | FetCO2 - End-Tidal CO2 (peak, held between breaths)
+// d[6] | reserved1  | varies    | Reserved/Unknown
+// d[7] | checksum   | 0-255     | Checksum: sum(d[0..6]) & 0xFF
+//
+// Sync Strategy:
+// - Look for 0x06 header (d[0])
+// - Validate checksum (d[7] must equal sum of d[0..6])
+// - Validate RR (d[2] must be <= 60)
+//
 struct MaCO2Packet {
-    uint8_t status1;        // d[0] - Status byte 1 (data valid flag)
-    uint8_t status2;        // d[1] - Status byte 2 (pump, leak, occlusion)
+    uint8_t status1;        // d[0] - Status/Data Valid (6 = valid data)
+    uint8_t status2;        // d[1] - Status byte 2  
     uint8_t rr;             // d[2] - Respiratory Rate (breaths/min)
-    uint8_t reserved1;      // d[3] - Unused/reserved
-    uint8_t fetco2;         // d[4] - End-tidal CO2 (waveform value)
-    uint8_t fico2;          // d[5] - Inspired CO2
-    uint8_t reserved2;      // d[6] - Unused/reserved
-    uint8_t reserved3;      // d[7] - Unused/reserved
+    uint8_t fico2;          // d[3] - Fractional Inspired CO2 (baseline ~0-3)
+    uint8_t fco2_wave;      // d[4] - CO2 Waveform (0-32 mmHg typical)
+    uint8_t fetco2;         // d[5] - End-Tidal CO2 (peak value ~0-120)
+    uint8_t reserved1;      // d[6] - Reserved/Unknown
+    uint8_t checksum;       // d[7] - Checksum: sum of d[0..6] & 0xFF
 };
 
 // Complete system data (MaCO2 + ADC readings)

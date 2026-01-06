@@ -24,12 +24,12 @@ DisplayManager::DisplayManager()
     memset(_ip, 0, sizeof(_ip));
     
     // Initialize previous values
-    _prevValues.fetco2 = 255;
+    _prevValues.co2_waveform = 255;
     _prevValues.fco2 = 255;
     _prevValues.o2_percent = -1;
     _prevValues.volume_ml = -1;
     _prevValues.status2 = 255;
-    memset(_prevValues.etco2_str, 0, sizeof(_prevValues.etco2_str));
+    memset(_prevValues.fco2_wave_str, 0, sizeof(_prevValues.fco2_wave_str));
     memset(_prevValues.fco2_str, 0, sizeof(_prevValues.fco2_str));
     memset(_prevValues.o2_str, 0, sizeof(_prevValues.o2_str));
     memset(_prevValues.vol_str, 0, sizeof(_prevValues.vol_str));
@@ -135,57 +135,42 @@ void DisplayManager::updateWaveform(const CO2Data& data) {
 
 void DisplayManager::updateNumericValues(const CO2Data& data) {
     const uint16_t y_start = _layout.values_y;
-    const uint16_t col_width = SCREEN_WIDTH / 2;  // Two columns instead of three
-    
+    const uint16_t _width = SCREEN_WIDTH;  // Full width for both boxes
+
     // Create temporary char buffers for string conversion
-    char etco2_str[8];
+    char fco2_wave_str[8];
     char fco2_str[8];
     char o2_str[8];
-    char vol_str[8];
-    
+
     // Convert CO2 values from mmHg to kPa (1 mmHg = 0.133322 kPa)
-    float etco2_kpa = (float)data.fetco2 * 0.133322;
-    float fco2_kpa = (float)data.fco2 * 0.133322;
-    
+    // FINAL CORRECTED mapping based on actual sensor data analysis:
+    // d[3] = FiCO2 - Inspired CO2 baseline (~0-3 mmHg) - stored in data.fco2
+    // d[4] = FCO2 - Real-time 8Hz CO2 waveform (0-32 mmHg) - stored in data.co2_waveform
+    // d[5] = FetCO2 - End-tidal peak value (0-120 mmHg) - stored in data.fetco2
+
+    float fco2_waveform_kpa = (float)data.co2_waveform * 0.133322;  // d[4] - Real-time curve
+
     // Convert values to strings with one decimal place for CO2
-    snprintf(etco2_str, sizeof(etco2_str), "%.1f", etco2_kpa);
-    snprintf(fco2_str, sizeof(fco2_str), "%.1f", fco2_kpa);
+    snprintf(fco2_wave_str, sizeof(fco2_wave_str), "%.1f", fco2_waveform_kpa);  // FCO2 waveform
     snprintf(o2_str, sizeof(o2_str), "%.1f", data.o2_percent);
-    snprintf(vol_str, sizeof(vol_str), "%d", (int)data.volume_ml);
-    
-    // First row: EtCO2, FCO2 (removed RR to make space for decimals)
-    // Only update if value changed
-    if (data.fetco2 != _prevValues.fetco2) {
-        drawMetricBox(0, y_start, col_width, 50,
-                      "EtCO2", _prevValues.etco2_str, (const char*)etco2_str, "kPa",
-                      TFT_DARKERBLUE);  // Darker blue for CO2
-        _prevValues.fetco2 = data.fetco2;
-        strncpy(_prevValues.etco2_str, etco2_str, sizeof(_prevValues.etco2_str));
+
+    // First row: FCO2 (8Hz waveform) - FULL WIDTH
+    // FCO2 box shows real-time breathing curve (updates every 125ms at 8Hz)
+    if (data.co2_waveform != _prevValues.co2_waveform) {
+        drawMetricBox(0, y_start, _width, 50,
+                      "FCO2", _prevValues.fco2_wave_str, (const char*)fco2_wave_str, "kPa",
+                      TFT_DARKERBLUE);
+        _prevValues.co2_waveform = data.co2_waveform;
+        strncpy(_prevValues.fco2_wave_str, fco2_wave_str, sizeof(_prevValues.fco2_wave_str));
     }
-    
-    if (data.fco2 != _prevValues.fco2) {
-        drawMetricBox(col_width, y_start, col_width, 50,
-                      "FCO2", _prevValues.fco2_str, (const char*)fco2_str, "kPa",
-                      TFT_DARKERBLUE);  // Darker blue for CO2
-        _prevValues.fco2 = data.fco2;
-        strncpy(_prevValues.fco2_str, fco2_str, sizeof(_prevValues.fco2_str));
-    }
-    
-    // Second row: O2, Volume
+
+    // Second row: O2 - FULL WIDTH
     if (abs(data.o2_percent - _prevValues.o2_percent) > 0.05) {  // Update if changed by > 0.05%
-        drawMetricBox(0, y_start + 50, col_width, 50,
+        drawMetricBox(0, y_start + 50, _width, 50,
                       "O2", _prevValues.o2_str, (const char*)o2_str, "%",
                       TFT_SLATEBLUE);  // Slate blue for O2
         _prevValues.o2_percent = data.o2_percent;
         strncpy(_prevValues.o2_str, o2_str, sizeof(_prevValues.o2_str));
-    }
-    
-    if (abs(data.volume_ml - _prevValues.volume_ml) > 0.5) {  // Update if changed by > 0.5mL
-        drawMetricBox(col_width, y_start + 50, col_width, 50,
-                      "Volume", _prevValues.vol_str, (const char*)vol_str, "mL",
-                      TFT_SLATEBLUE);  // Slate blue for Volume
-        _prevValues.volume_ml = data.volume_ml;
-        strncpy(_prevValues.vol_str, vol_str, sizeof(_prevValues.vol_str));
     }
 }
 

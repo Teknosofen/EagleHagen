@@ -10,6 +10,7 @@
 #include <AsyncWebSocket.h>
 #include <ArduinoJson.h>
 #include "MaCO2Parser.h"  // For CO2Data structure
+#include "DataLogger.h"   // For output format control
 
 class WiFiManager {
 public:
@@ -28,6 +29,9 @@ public:
     
     // Stop web server
     void stopServer();
+    
+    // Set DataLogger reference (for format control)
+    void setDataLogger(DataLogger* logger) { _dataLogger = logger; }
     
     // Update with new data (broadcasts to WebSocket clients)
     void update(const CO2Data& data);
@@ -60,10 +64,14 @@ private:
     uint8_t _cmdQueueHead;
     uint8_t _cmdQueueTail;
     
+    // DataLogger reference (for format control)
+    DataLogger* _dataLogger;
+    
     // Web server handlers
     void handleRoot(AsyncWebServerRequest* request);
     void handleData(AsyncWebServerRequest* request);
     void handleCommand(AsyncWebServerRequest* request);
+    void handleSetFormat(AsyncWebServerRequest* request);
     void handleNotFound(AsyncWebServerRequest* request);
     
     // WebSocket handlers

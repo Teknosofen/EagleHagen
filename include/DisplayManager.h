@@ -100,12 +100,12 @@ private:
     
     // Previous values to avoid flicker
     struct PreviousValues {
-        uint8_t fetco2;
+        uint8_t co2_waveform;  // FCO2 waveform value (d[4])
         uint8_t fco2;
         float o2_percent;
         float volume_ml;
         uint8_t status2;
-        char etco2_str[8];
+        char fco2_wave_str[8];  // Formatted FCO2 waveform string
         char fco2_str[8];
         char o2_str[8];
         char vol_str[8];

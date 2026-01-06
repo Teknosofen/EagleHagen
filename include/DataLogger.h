@@ -1,12 +1,19 @@
 // DataLogger.h
-// Handles data export in PIC-compatible format for LabVIEW
-// Also manages CSV logging and data recording
+// Handles data export in multiple formats:
+// - Legacy PIC format (for LabVIEW compatibility)
+// - Tab-separated ASCII format (for modern tools)
 
 #ifndef DATA_LOGGER_H
 #define DATA_LOGGER_H
 
 #include <Arduino.h>
 #include "MaCO2Parser.h"  // For CO2Data structure
+
+// Output format selection
+enum OutputFormat {
+    FORMAT_LEGACY_LABVIEW = 0,  // Original PIC format with binary data
+    FORMAT_TAB_SEPARATED = 1     // Tab-separated ASCII format
+};
 
 class DataLogger {
 public:
@@ -15,12 +22,22 @@ public:
     // Initialize logger
     bool begin();
     
-    // Send data in PIC-compatible format to stream (for LabVIEW)
+    // Send data to stream in selected format (8Hz)
+    void sendData(Stream& stream, const CO2Data& data);
+    
+    // Legacy PIC-compatible format (for LabVIEW)
     void sendPICFormat(Stream& stream, const CO2Data& data);
     
-    // Enable/disable LabVIEW mirroring via USB CDC
-    void setLabViewEnabled(bool enabled);
-    bool isLabViewEnabled() const { return _labviewEnabled; }
+    // New tab-separated ASCII format
+    void sendTabSeparated(Stream& stream, const CO2Data& data);
+    
+    // Format selection
+    void setOutputFormat(OutputFormat format) { _outputFormat = format; }
+    OutputFormat getOutputFormat() const { return _outputFormat; }
+    
+    // Enable/disable host output via USB CDC
+    void setOutputEnabled(bool enabled);
+    bool isOutputEnabled() const { return _outputEnabled; }
     
     // CSV logging (future implementation)
     void enableCSVLogging(bool enabled);
@@ -34,7 +51,8 @@ public:
     void resetStatistics();
     
 private:
-    bool _labviewEnabled;
+    OutputFormat _outputFormat;
+    bool _outputEnabled;
     bool _csvEnabled;
     uint32_t _packetsSent;
     uint32_t _bytesSent;
