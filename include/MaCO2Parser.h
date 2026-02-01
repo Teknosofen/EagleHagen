@@ -105,7 +105,12 @@ private:
     uint32_t _packetCount;
     uint32_t _errorCount;
     uint32_t _lastPacketTime;
-    
+
+    // End-tidal peak tracking (sensor doesn't provide separate EtCO2)
+    uint8_t _peakCO2;           // Current breath peak
+    uint8_t _lastEtCO2;         // Last completed breath's end-tidal
+    uint8_t _prevWaveform;      // Previous waveform value for edge detection
+
     bool readPacket(HardwareSerial& serial);
     void decodePacket(const MaCO2Packet& packet, CO2Data& data);
 };

@@ -3,12 +3,15 @@
 
 #include "MaCO2Parser.h"
 
-MaCO2Parser::MaCO2Parser() 
+MaCO2Parser::MaCO2Parser()
     : _state(WAIT_FOR_DATA)
     , _rxIndex(0)
     , _packetCount(0)
     , _errorCount(0)
     , _lastPacketTime(0)
+    , _peakCO2(0)
+    , _lastEtCO2(0)
+    , _prevWaveform(0)
 {
     memset(&_rxBuffer, 0, sizeof(_rxBuffer));
 }
@@ -193,8 +196,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
                                 syncStartTime = 0;  // Reset sync timer
                                 _state = WAIT_FOR_DATA;
 
-                                // Reset sync message flag
-                                static bool syncMessagePrinted = false;
+                                // Reset sync message flag (declared at line 145)
                                 syncMessagePrinted = false;
 
                                 return true;
@@ -329,10 +331,30 @@ void MaCO2Parser::decodePacket(const MaCO2Packet& packet, CO2Data& data) {
     data.status2 = packet.status2;           // d[1] - Status
     data.respiratory_rate = packet.rr;       // d[2] - RR
     
-    // CO2 values - CORRECTED based on data analysis
-    data.fco2 = packet.fico2;                // d[3] - Inspired baseline (FiCO2)  
-    data.co2_waveform = packet.fco2_wave;    // d[4] - 8Hz waveform curve (FCO2)
-    data.fetco2 = packet.fetco2;             // d[5] - End-tidal peak (FetCO2)
+    // CO2 waveform from d[4]
+    data.co2_waveform = packet.fco2_wave;    // d[4] - 8Hz waveform curve
+    data.fco2 = packet.fico2;                // d[3] - Inspired baseline (FiCO2)
+
+    // End-tidal peak tracking (sensor doesn't provide separate EtCO2 value)
+    // Detect breath cycle: when waveform drops significantly, save the peak as EtCO2
+    uint8_t currentWaveform = packet.fco2_wave;
+
+    // Track the peak during expiration
+    if (currentWaveform > _peakCO2) {
+        _peakCO2 = currentWaveform;
+    }
+
+    // Detect start of new breath (waveform drops below 25% of peak, or drops by >10)
+    // This indicates inspiration has started, so previous peak was end-tidal
+    if (_peakCO2 > 5 && currentWaveform < (_peakCO2 / 4) && _prevWaveform > currentWaveform) {
+        _lastEtCO2 = _peakCO2;  // Save the peak as end-tidal
+        _peakCO2 = currentWaveform;  // Reset for next breath
+    }
+
+    _prevWaveform = currentWaveform;
+
+    // Use tracked end-tidal value (falls back to 0 until first breath detected)
+    data.fetco2 = _lastEtCO2;
     
     // Check data validity (d[0] should be 6 for valid data)
     data.valid = (packet.status1 == 6) && checksum_valid && isDataValid(data);

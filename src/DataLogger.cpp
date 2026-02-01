@@ -45,19 +45,21 @@ void DataLogger::sendPICFormat(Stream& stream, const CO2Data& data) {
 }
 
 void DataLogger::sendTabSeparated(Stream& stream, const CO2Data& data) {
-    // New format: Tab-separated ASCII
-    // Status1<TAB>Status2<TAB>RR<TAB>FCO2<TAB>FetCO2<TAB>O2%<TAB>Volume_mL<CR><LF>
+    // Tab-separated ASCII format (CO2 in kPa, matching web interface)
+    // CO2_kPa<TAB>O2%<TAB>RR<TAB>Volume_mL<TAB>Status1<TAB>Status2<CR><LF>
+
+    // Convert CO2 from mmHg to kPa (1 mmHg = 0.133322 kPa)
+    float co2_kpa = data.co2_waveform * 0.133322f;
 
     char buffer[96];
     snprintf(buffer, sizeof(buffer),
-        "%d\t%d\t%d\t%d\t%d\t%.1f\t%.1f\r\n",
-        data.status1,
-        data.status2,
+        "%.1f\t%.1f\t%d\t%d\t%d\t%d\r\n",
+        co2_kpa,              // CO2 waveform in kPa
+        data.o2_percent,      // O2 percentage
         data.respiratory_rate,
-        data.co2_waveform,  // FCO2 curve (d[4])
-        data.fetco2,        // FetCO2 peak (d[5])
-        data.o2_percent,    // O2 percentage
-        data.volume_ml      // Volume in mL
+        (int)data.volume_ml,  // Volume in mL
+        data.status1,
+        data.status2
     );
 
     size_t written = stream.print(buffer);
@@ -89,25 +91,31 @@ void DataLogger::formatPICPacket(char* buffer, size_t bufferSize, const CO2Data&
     // <ESC>ABC<TAB>DEFGH<TAB>IJKLM<TAB>[Status1][Status2][RR][FCO2][FetCO2]<CR><LF>
     //
     // Where:
-    //  ABC    = CO2 waveform (3 digits, 0-255)
-    //  DEFGH  = O2 ADC (5 digits, 0-65535)
+    //  ABC    = CO2 waveform scaled (3 digits, 53 = 5.3 kPa)
+    //  DEFGH  = O2 scaled (5 digits, 201 = 20.1%)
     //  IJKLM  = Volume ADC (5 digits, 0-1023)
     //  Status1 = Status byte 1
     //  Status2 = Status byte 2 (with zero replacement)
     //  RR      = Respiratory rate (with zero replacement)
-    //  FCO2    = Fractional CO2 (with zero replacement)
-    //  FetCO2  = End-tidal CO2 (with zero replacement)
-    
+    //  FCO2    = FiCO2 scaled (byte, 4 = 0.4 kPa)
+    //  FetCO2  = End-tidal CO2 scaled (byte, 53 = 5.3 kPa)
+    //
+    // All CO2 fields: mmHg * 0.133322 * 10 = kPa * 10 (one implicit decimal)
+
+    int co2_scaled    = (int)(data.co2_waveform * 1.33322f);  // mmHg → kPa * 10
+    uint8_t fco2_scaled  = (uint8_t)(data.fco2  * 1.33322f);  // mmHg → kPa * 10
+    uint8_t fetco2_scaled = (uint8_t)(data.fetco2 * 1.33322f); // mmHg → kPa * 10
+
     snprintf(buffer, bufferSize,
         "\x1B%03d\t%05d\t%05d\t%c%c%c%c%c\r\n",
-        data.co2_waveform,
-        data.o2_adc,
+        co2_scaled,
+        (int)(data.o2_percent * 10.0f),
         data.vol_adc,
         data.status1,
         replaceZero(data.status2, 128),
         replaceZero(data.respiratory_rate, 255),
-        replaceZero(data.fco2, 255),
-        replaceZero(data.fetco2, 255)
+        replaceZero(fco2_scaled, 255),
+        replaceZero(fetco2_scaled, 255)
     );
 }
 

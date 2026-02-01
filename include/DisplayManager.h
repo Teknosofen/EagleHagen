@@ -34,6 +34,9 @@ public:
     
     // Set network info to display
     void setNetworkInfo(const char* ssid, const char* ip);
+
+    // Set output format label for LCD status area
+    void setOutputFormatName(const char* name);
     
     // Update all display elements
     void updateAll(const CO2Data& data);
@@ -97,6 +100,10 @@ private:
     // Network info
     char _ssid[32];
     char _ip[16];
+
+    // Output format label
+    char _outputFormatName[32];
+    char _prevFormatName[32];
     
     // Previous values to avoid flicker
     struct PreviousValues {

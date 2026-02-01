@@ -16,7 +16,7 @@
 
 // WiFi Settings
 const char* WIFI_SSID = "EAGLEHAGEN";
-const char* WIFI_PASSWORD = "co2monitor";
+const char* WIFI_PASSWORD = ""; // no password "co2monitor";
 const bool WIFI_AP_MODE = true;  // true = Access Point, false = Station
 
 // Pin Definitions
@@ -25,6 +25,7 @@ const bool WIFI_AP_MODE = true;  // true = Access Point, false = Station
 #define O2_SENSOR_PIN   1
 #define VOL_SENSOR_PIN  2
 #define BUTTON_PIN      14  // IO14 - Pump start button
+#define BOOT0_PIN        0  // GPIO0 - Format toggle button
 
 // Update intervals
 #define DATA_UPDATE_INTERVAL_MS     100   // 10Hz data acquisition (faster than sensor's 8Hz to prevent buffer buildup)
@@ -44,6 +45,7 @@ DisplayManager displayManager;
 WiFiManager wifiManager;
 DataLogger dataLogger;
 Button pumpButton(BUTTON_PIN, 1000, 50);  // IO14, 1000ms long press, 50ms debounce
+Button formatButton(BOOT0_PIN, 1000, 50); // GPIO0 (BOOT0), format toggle
 
 CO2Data currentData;
 
@@ -134,10 +136,11 @@ void setup() {
     wifiManager.setDataLogger(&dataLogger);
     dataLogger.setOutputEnabled(true);  // Enable host output via USB CDC
     
-    // Initialize Pump Button
-    Serial.println("Initializing pump button...");
+    // Initialize Buttons
+    Serial.println("Initializing buttons...");
     pumpButton.begin();
-    Serial.println("Button on IO14 ready - press to start pump");
+    formatButton.begin();
+    Serial.println("IO14: pump start | BOOT0: toggle output format");
     
     // Show ready screen with IP
     char ipStr[32];
@@ -148,6 +151,7 @@ void setup() {
     // Clear screen and set network info for status display
     displayManager.clearScreen();
     displayManager.setNetworkInfo(WIFI_SSID, wifiManager.getIP().toString().c_str());
+    displayManager.setOutputFormatName(dataLogger.getOutputFormat() == FORMAT_LEGACY_LABVIEW ? "Out: LabVIEW" : "Out: ASCII");
     
     Serial.println("\n=== System Ready ===");
     Serial.println("USB CDC: LabVIEW data output enabled");
@@ -220,6 +224,17 @@ void loop() {
     if (pumpButton.wasPressed()) {
         Serial.println("Button pressed - sending pump start command");
         maco2Parser.sendCommand(SerialMaCO2, CMD_START_PUMP);
+    }
+
+    // Handle format toggle button (BOOT0)
+    formatButton.update();
+    if (formatButton.wasPressed()) {
+        OutputFormat newFormat = (dataLogger.getOutputFormat() == FORMAT_LEGACY_LABVIEW)
+                                 ? FORMAT_TAB_SEPARATED : FORMAT_LEGACY_LABVIEW;
+        dataLogger.setOutputFormat(newFormat);
+        const char* formatName = (newFormat == FORMAT_LEGACY_LABVIEW) ? "Out: LabVIEW" : "Out: ASCII";
+        displayManager.setOutputFormatName(formatName);
+        Serial.printf("Output format switched to: %s\n", formatName);
     }
     
     // Commands from web interface

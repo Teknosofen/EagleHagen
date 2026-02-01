@@ -22,6 +22,10 @@ DisplayManager::DisplayManager()
     // Initialize network info
     memset(_ssid, 0, sizeof(_ssid));
     memset(_ip, 0, sizeof(_ip));
+
+    // Initialize output format label
+    memset(_outputFormatName, 0, sizeof(_outputFormatName));
+    memset(_prevFormatName, 0, sizeof(_prevFormatName));
     
     // Initialize previous values
     _prevValues.co2_waveform = 255;
@@ -42,13 +46,13 @@ DisplayManager::DisplayManager()
     _layout.header_h = 30;  // Header section height
     
     _layout.wave_y = 30;  // Waveform starts after header
-    _layout.wave_h = 135;  // Increased by 5 pixels (was 130)
-    
-    _layout.values_y = 165;  // Values moved DOWN by 5 pixels (was 160)
+    _layout.wave_h = 120;  // Compacted to make room for format note at bottom
+
+    _layout.values_y = 150;
     _layout.values_h = 100;
-    
-    _layout.status_y = 265;  // Status moved DOWN by 5 pixels (was 260)
-    _layout.status_h = 65;   // Reduced from 75 to 65
+
+    _layout.status_y = 250;
+    _layout.status_h = 70;  // Extended to fit format note below IP
 }
 
 bool DisplayManager::begin() {
@@ -102,6 +106,13 @@ void DisplayManager::setNetworkInfo(const char* ssid, const char* ip) {
     if (ip) {
         strncpy(_ip, ip, sizeof(_ip) - 1);
         _ip[sizeof(_ip) - 1] = '\0';
+    }
+}
+
+void DisplayManager::setOutputFormatName(const char* name) {
+    if (name) {
+        strncpy(_outputFormatName, name, sizeof(_outputFormatName) - 1);
+        _outputFormatName[sizeof(_outputFormatName) - 1] = '\0';
     }
 }
 
@@ -175,11 +186,13 @@ void DisplayManager::updateNumericValues(const CO2Data& data) {
 }
 
 void DisplayManager::updateStatusIndicators(const CO2Data& data) {
-    // Only update if status changed
-    if (data.status2 == _prevValues.status2) {
+    // Only update if status or format label changed
+    bool formatChanged = (strcmp(_outputFormatName, _prevFormatName) != 0);
+    if (data.status2 == _prevValues.status2 && !formatChanged) {
         return;
     }
     _prevValues.status2 = data.status2;
+    strncpy(_prevFormatName, _outputFormatName, sizeof(_prevFormatName));
     
     const uint16_t y_start = _layout.status_y;
     
@@ -217,8 +230,14 @@ void DisplayManager::updateStatusIndicators(const CO2Data& data) {
     if (strlen(_ip) > 0) {
         char ip_label[30];
         snprintf(ip_label, sizeof(ip_label), "IP: %s", _ip);
-        _tft.setTextColor(TFT_SLATEBLUE, TFT_LOGOBACKGROUND);
+        _tft.setTextColor(TFT_DARKERBLUE, TFT_LOGOBACKGROUND);
         _tft.drawString(ip_label, SCREEN_WIDTH / 2, y_start + IP_Y_OFFSET);
+    }
+
+    // Output format note
+    if (strlen(_outputFormatName) > 0) {
+        _tft.setTextColor(TFT_DARKERBLUE, TFT_LOGOBACKGROUND);
+        _tft.drawString(_outputFormatName, SCREEN_WIDTH / 2, y_start + 62);
     }
 }
 
