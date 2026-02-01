@@ -4,7 +4,7 @@
 #include "DataLogger.h"
 
 DataLogger::DataLogger()
-    : _outputFormat(FORMAT_TAB_SEPARATED)
+    : _outputFormat(FORMAT_LEGACY_LABVIEW)
     , _outputEnabled(true)
     , _csvEnabled(false)
     , _packetsSent(0)
