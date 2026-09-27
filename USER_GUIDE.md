@@ -12,7 +12,7 @@ The Eaglehagen monitor connects to a **MedAir MaCO2-V3** side-stream CO₂ analy
 |---|---|
 | **Built-in screen** | CO₂ waveform, current CO₂ (kPa), O₂ (%), alarm badges, network info |
 | **Phone / tablet / laptop over WiFi** | Live values, three scrolling charts, pump/calibration buttons, data export (CSV/JSON) |
-| **PC over USB** | Continuous serial data stream for LabVIEW or any terminal/logging program |
+| **PC over USB** | Continuous serial data stream for LabVIEW, the PC monitor page (section 7, downloadable from the device), or any terminal/logging program |
 
 All three can be used at the same time. No internet connection is needed.
 
@@ -108,6 +108,8 @@ Open `http://eaglehagen.local` or `http://192.168.4.1` while connected to `EAGLE
 
 **USB Host Output Format:** shows and selects the USB output format. It always reflects the device's current setting, including changes made with the BOOT button.
 
+**PC monitor page (USB):** the **Download** button at the bottom saves the stand-alone PC monitor page (`Eaglehagen_Serial_Monitor.html`) to the computer you're browsing from. See section 7.
+
 ### Recording and exporting data
 
 - **The browser does the recording, not the device.** Recording starts when the page opens and holds the **last 2 minutes** (960 samples). Older samples are dropped.
@@ -116,7 +118,7 @@ Open `http://eaglehagen.local` or `http://192.168.4.1` while connected to `EAGLE
 - File names look like `medair_co2_data_2026-09-27T10-15-00-000Z.csv`.
 - CSV columns: `Timestamp, Elapsed(s), CO2_Waveform(kPa), FetCO2(kPa), FiCO2(kPa), RR(bpm), O2(%), Volume(mL), Pump_Running, Leak_Detected, Occlusion_Detected, Status1, Status2`
 
-For longer recordings, use the USB output (section 6) with a logging program.
+For longer recordings, use the PC monitor page over USB (section 7): it records without a time limit.
 
 ---
 
@@ -124,7 +126,7 @@ For longer recordings, use the USB output (section 6) with a logging program.
 
 1. Connect the device's **USB-C** port to the PC. Use a data cable, not a charge-only one.
 2. Find the port:
-   - **Windows:** Device Manager → *Ports (COM & LPT)* → "USB Serial Device (COMx)"
+   - **Windows:** Device Manager → *Ports (COM & LPT)* → "USB Serial Device (COMx)" (Swedish Windows: "Seriell USB-enhet")
    - **Linux:** `/dev/ttyACM0`
 3. Open the port with **115200 baud, 8 data bits, no parity, 1 stop bit, no flow control**.
 4. Data arrives about **10 times per second** whenever the sensor delivers valid data.
@@ -139,6 +141,8 @@ For longer recordings, use the USB output (section 6) with a logging program.
 CO2_kPa <TAB> O2_% <TAB> RR <TAB> Volume_mL <TAB> Status1 <TAB> Status2
 ```
 Example: `4.3	20.9	14	320	6	0`
+
+> **Tip:** the PC monitor page (section 7) accepts both formats and detects which one is in use.
 
 > **Diagnostic messages:** in **LabVIEW** format the port carries only data frames. In **ASCII** format the device also sends occasional diagnostic lines, which always start with `#`. A logging program should skip lines starting with `#`.
 
@@ -155,7 +159,67 @@ All other bytes are ignored.
 
 ---
 
-## 7. Units and normal values
+## 7. PC monitor page (no LabVIEW needed)
+
+`Eaglehagen_Serial_Monitor.html` is a stand-alone page that shows the monitor's data on a PC over the USB cable. It needs no installation and no internet, and nothing is sent anywhere.
+
+The monitor itself carries a copy of the page, so you don't need any other files. You can also find it in this project as [tools/Eaglehagen_Serial_Monitor.html](tools/Eaglehagen_Serial_Monitor.html).
+
+> **Both output formats work.** The page reads the **LabVIEW** format and the **ASCII** format, and detects which one is arriving by itself. You don't need to press BOOT before using it. If someone presses BOOT while you are connected, the page follows the switch without reconnecting.
+
+### Step 1: Get the page over WiFi (once per PC)
+
+1. On the PC, join the WiFi network **`EAGLEHAGEN`** (no password).
+2. Open **`http://eaglehagen.local`** (or `http://192.168.4.1`).
+3. At the bottom of the web page, under **PC monitor page (USB)**, click **Download**. Save the file somewhere easy to find, for example the desktop.
+4. Switch the PC back to its normal WiFi if you like. The saved page doesn't need any network.
+
+The page can't be used directly from the WiFi address: browsers only allow serial-port access from a saved file. The saved copy keeps working, so this step is needed only once per PC (and again after a firmware update, to get the latest version).
+
+### Step 2: Connect with the USB cable
+
+1. Close LabVIEW, or any other program using the monitor's COM port. Only one program can use a port at a time.
+2. Connect the monitor's USB-C port to the PC.
+3. Open the saved file in **Google Chrome** or **Microsoft Edge** (right-click → *Open with*, if another browser is the default). Other browsers can't access serial ports; the page tells you if that's the problem.
+4. Scroll to the **Serial port** panel at the bottom of the page.
+   - **First time only:** click **Add port…** and choose the monitor's COM port in the browser's list. It may be named "USB JTAG/serial debug unit" or "USB Serial Device". The browser requires this one step.
+   - After that, the monitor appears in the **Serial port** list and is selected automatically.
+5. Leave **Baud rate** at 115200 and **Data format** at *Auto-detect*, then click **Connect selection**.
+
+The status pill at the top right shows **Receiving data** when values are coming in.
+
+### What you see
+
+- **Alarm badges:** Data valid, Pump, Leak and Occlusion. Green means OK; red and pulsing means a problem.
+- **Values:** end-tidal CO₂ (kPa, with mmHg underneath), CO₂, respiratory rate, O₂ and volume.
+- **Charts:** scrolling CO₂ waveform, O₂ and volume. The time window can be set to 30 s, 1, 2 or 5 minutes.
+- **◐ button:** switches between a dark and a light theme.
+
+What differs between the two formats:
+
+| | LabVIEW format | ASCII format |
+|---|---|---|
+| End-tidal CO₂ | Sent by the monitor | Calculated by the page from the waveform |
+| FiCO₂ | Shown under the CO₂ value | Not available |
+| Volume | Raw ADC counts (0–1023) | mL |
+| Device messages (`#` lines) | None | Shown in the log at the bottom |
+
+### Recording and CSV
+
+- Everything received while connected is recorded, with **no 2-minute limit**. **Pause** stops recording temporarily and **Clear** starts over.
+- **Save CSV** stores the recording. Chrome and Edge let you choose where to save it.
+- **CSV style:** choose *Swedish Excel* if the file will be opened in Excel with Swedish settings (it then uses `;` and decimal commas).
+- The columns are the same as the web page export, plus `Volume(ADC)` and `Format`. CO₂ values are in kPa.
+
+### Other controls
+
+- **Start pump** and **Zero calibration** work as on the web page. Zero calibration asks for confirmation; use it only with room air.
+- **Device messages & connection log** at the bottom lists connections, format changes and device messages.
+- To try the page without a device, add `#demo` to the end of the address in the browser.
+
+---
+
+## 8. Units and normal values
 
 - All CO₂ values are shown in **kPa** (1 kPa ≈ 7.5 mmHg).
 - Typical end-tidal CO₂ in a healthy adult is about **4.5–6.0 kPa** (35–45 mmHg).
@@ -165,7 +229,7 @@ All other bytes are ignored.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Problem | Check |
 |---|---|
@@ -176,16 +240,19 @@ All other bytes are ignored.
 | OCCL badge red | Kinked or wet sample line or full water trap. Fix, then **Start Pump**. |
 | LEAK badge red | Loose connector or damaged sample line |
 | Can't find the `EAGLEHAGEN` network | Wait until the main screen appears. Move closer. Power-cycle the device. |
+| No **Download** button on the web page | Reload with Ctrl+F5 (the browser may show an old cached page). The button needs the current firmware. |
 | Web page won't load | Make sure the phone is on `EAGLEHAGEN` (some phones switch back to mobile data when a WiFi has no internet — allow staying connected). Use `http://`, not `https://`. |
 | `eaglehagen.local` not found | Use `http://192.168.4.1` instead. Some Android devices and VPN apps don't resolve `.local` names. |
 | Page shows "Connecting…" | The device restarted or is out of range. The page reconnects by itself. |
 | PC receives no data | Data-capable USB cable? Correct COM port? No other program (e.g. a serial monitor) holding the port? |
 | LabVIEW gets garbled data | The format may be set to ASCII. Press BOOT until the screen shows `Out: LabVIEW`. |
+| PC monitor page can't connect | Close LabVIEW or other programs using the COM port. Use Chrome or Edge. |
+| PC monitor page says the browser can't open serial ports | You opened it from the WiFi address, or in another browser. Download it, then open the saved file in Chrome or Edge. |
 | Device doesn't start after pressing BOOT | It's in download mode. Power-cycle without holding BOOT. |
 
 ---
 
-## 9. Quick reference
+## 10. Quick reference
 
 | | |
 |---|---|
@@ -196,3 +263,4 @@ All other bytes are ignored.
 | BOOT button | Toggle USB format LabVIEW ⇄ ASCII |
 | Web recording | Last 2 minutes, export CSV/JSON |
 | Commands over USB | `0xA5` start pump, `0x5A` zero cal |
+| PC monitor page | Download from the web page (WiFi), then open the file in Chrome/Edge; both formats |

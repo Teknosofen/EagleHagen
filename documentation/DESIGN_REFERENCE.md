@@ -15,7 +15,7 @@ Where the older documents contradicted each other, **the current source code (`s
 3. [MaCO2-V3 CO₂ sensor and protocol](#3-maco2-v3-co-sensor-and-protocol)
 4. [Legacy PIC16F876A system](#4-legacy-pic16f876a-system)
 5. [Firmware architecture](#5-firmware-architecture)
-6. [USB host output (LabVIEW / ASCII)](#6-usb-host-output-labview--ascii)
+6. [USB host output (LabVIEW / ASCII)](#6-usb-host-output-labview--ascii), including the PC monitor page (§6.4)
 7. [WiFi and web interface](#7-wifi-and-web-interface)
 8. [LCD user interface](#8-lcd-user-interface)
 9. [Configuration constants](#9-configuration-constants)
@@ -74,6 +74,7 @@ Vol sensor ─► GPIO2 ADC                      │  ├─ USB-C CDC ◄──
 | USB only | MaCO2 ↔ ESP32 ↔ USB-C ↔ PC/LabVIEW | Drop-in replacement for PIC |
 | WiFi only | MaCO2 ↔ ESP32 ↔ WiFi ↔ browser | Standalone bedside monitoring, no PC |
 | Dual | Both at once | LabVIEW logging plus quick checks on a phone |
+| USB + PC monitor page | MaCO2 ↔ ESP32 ↔ USB-C ↔ Chrome/Edge page (§6.4) | Live display and unlimited CSV recording on a PC, no LabVIEW |
 
 ### Migration plan (from original design)
 
@@ -372,7 +373,7 @@ main.cpp  (orchestrator — setup, loop, timing, command routing)
        └─────────────┴──────── main.cpp ─────────┴──────────┘
 ```
 
-**Files:** `src/*.cpp`, headers in `include/` (`MaCO2Parser.h`, `ADCManager.h`, `DisplayManager.h`, `WiFiManager.h`, `DataLogger.h`, `DebugLog.h`, `Button.hpp`, `ChartJS.h`, `TFT_eSPI_Setup.h`). The folders `EagleHagen/` and `_older_stuff/` contain earlier code that isn't built.
+**Files:** `src/*.cpp`, headers in `include/` (`MaCO2Parser.h`, `ADCManager.h`, `DisplayManager.h`, `WiFiManager.h`, `DataLogger.h`, `DebugLog.h`, `Button.hpp`, `ChartJS.h`, `TFT_eSPI_Setup.h`, and the generated `MonitorPage.h`). `tools/` holds the PC monitor page and `scripts/` its build-time embedding script (§6.4). The folders `EagleHagen/` and `_older_stuff/` contain earlier code that isn't built.
 
 ### 5.2 Key interfaces
 
@@ -464,7 +465,7 @@ ADC readings are taken only when a new sensor packet arrives, so the ADC rate fo
 | WebSocket broadcast | 125 ms | 8 Hz |
 | USB host output | 100 ms | 10 Hz, only when `valid` |
 
-`main.cpp` defines `LABVIEW_UPDATE_INTERVAL_MS = 200`, but the host-output block actually uses `DATA_UPDATE_INTERVAL_MS` (100 ms). Some comments in `main.cpp` and the web page still say "8 Hz".
+`main.cpp` defines `LABVIEW_UPDATE_INTERVAL_MS = 200`, but the host-output block actually uses `DATA_UPDATE_INTERVAL_MS` (100 ms). The measured rate is about 9–10 frames/s, limited by the sensor's ~8–10 Hz packet rate. The web JSON export's `sample_rate_hz: 8` refers to the WebSocket rate.
 
 ### 5.6 Command routing
 
@@ -507,7 +508,7 @@ Remaining caveat: web-server callbacks run in the AsyncTCP task. In ASCII mode, 
 
 ## 6. USB host output (LabVIEW / ASCII)
 
-USB-C enumerates as a CDC virtual COM port (`ARDUINO_USB_CDC_ON_BOOT=1`): "USB Serial Device (COMx)" on Windows, `/dev/ttyACM0` on Linux. The baud rate doesn't matter for USB CDC, and 115200 8N1 is the convention. The same port carries programming, debug messages and data.
+USB-C enumerates as a CDC virtual COM port (`ARDUINO_USB_CDC_ON_BOOT=1`, ESP32-S3 USB-Serial/JTAG, VID:PID `303A:1001`): "USB Serial Device (COMx)" on Windows ("Seriell USB-enhet" in Swedish), `/dev/ttyACM0` on Linux. Chrome's port picker may list it as "USB JTAG/serial debug unit". The baud rate doesn't matter for USB CDC, and 115200 8N1 is the convention. The same port carries programming, debug messages and data.
 
 > Diagnostic text is muted in Legacy mode and `#`-prefixed in ASCII mode (§5.8). Parsers of the ASCII format should skip lines starting with `#`.
 
@@ -541,6 +542,42 @@ CO₂ has 1 decimal (kPa), O₂ has 1 decimal (%), RR, volume (integer mL) and s
 
 BOOT button, web radio buttons, or `GET /api/setFormat?format=0` (legacy) / `1` (tab-separated). The setting isn't stored and resets to Legacy at power-up.
 
+### 6.4 PC monitor page (`tools/Eaglehagen_Serial_Monitor.html`)
+
+A stand-alone, single-file web page that displays and records the USB stream on a PC without LabVIEW. It has no dependencies: charts are drawn on `<canvas>`, the logo is embedded as base64, and nothing is loaded from the internet. User instructions are in section 7 of the user guide.
+
+**It accepts both host output formats.** The parser handles the Legacy LabVIEW format (§6.1) and the tab-separated ASCII format (§6.2) in the same stream, so a BOOT-button switch while connected is followed without reconnecting. The *Data format* selector can force one format, but *Auto-detect* is the default.
+
+**Distribution: the device carries its own copy.** The page is embedded in the firmware and offered as a download from the built-in web page (`GET /monitor.html`, §7.2), so no external files are needed. The intended workflow:
+1. Over WiFi, open the device's web page and click **Download** under *PC monitor page (USB)*.
+2. Open the saved file in Chrome or Edge, and connect with the USB cable.
+
+The page can't run directly from `http://192.168.4.1`. Web Serial requires a secure context (`https://`, `localhost` or `file://`), and plain HTTP to the device is not one. That's why it's a download, not a route to browse. All three presentation paths remain: the LCD, the WiFi web page, and this page over USB.
+
+**Build integration:**
+- `scripts/embed_monitor_page.py`, a PlatformIO `pre:` extra script, gzips `tools/Eaglehagen_Serial_Monitor.html` at every build (level 9, `mtime=0`, so identical input gives identical output) into `include/MonitorPage.h` (`MONITOR_PAGE_GZ`, `MONITOR_PAGE_GZ_LEN`).
+- The header is rewritten only when the page changes, so unchanged builds don't recompile. It's generated, so it's in `.gitignore`.
+- The HTML file in `tools/` is the only source to edit. Every firmware build serves the matching version.
+- Cost: about 56 KB of HTML (including the base64 logo) becomes about 28 KB of flash.
+
+**Serial access:** Web Serial API, so only **Chrome and Edge** (desktop). It works from a `file://` URL. The browser's own port picker must be used once per device ("Add port…"). After that, `navigator.serial.getPorts()` lists the device in the page's own selector, and Espressif devices (USB VID `0x303A`) are pre-selected. Plug and unplug events are handled. Only one program can hold the COM port, so LabVIEW must be closed first.
+
+**Parser** (`StreamParser`, between the `PARSER START` / `PARSER END` markers):
+- **ESC (0x1B)** starts a candidate LabVIEW frame. It's accepted only if all 24 bytes validate: TABs at offsets 4, 10 and 16, CR LF at 22–23, and numeric ASCII fields. Otherwise the parser skips one byte and resyncs. Validating the whole frame keeps binary tail bytes equal to 0x1B or 0x0A (e.g. EtCO₂ = 27 mmHg, RR = 10) from breaking the framing.
+- **Other bytes** are read as a text line up to LF. A line of six numeric TAB-separated fields is an ASCII frame. A line starting with `#` is a device message and goes to the log. Other printable text also goes to the log, and binary junk is counted as an error.
+- Zero replacement is undone (Status2 128 → 0; RR, FiCO₂ and EtCO₂ 255 → 0). LabVIEW CO₂ values (mmHg) are converted to kPa.
+- In ASCII format, EtCO₂ isn't transmitted. The page computes it with the firmware's peak-tracking algorithm (`EtTracker`, §3.7). FiCO₂ is unavailable.
+- Volume is **ADC counts** in LabVIEW format and **mL** in ASCII format. The page labels the unit accordingly and stores them in separate CSV columns.
+- **Tests:** `node tools/tests/test_monitor_parser.js` extracts the parser from the HTML and runs 10 checks. They cover a real device capture (`tools/tests/capture_labview.bin`) fed in odd-sized chunks, a mid-frame start, binary bytes that look like frame markers, ASCII with `#` lines, a format switch mid-stream, random garbage, and the EtCO₂ tracker. Run them after editing the parser.
+
+**Recording:** every frame received while connected is kept, with no time limit (unlike the 2-minute web buffer). **CSV** columns: `Timestamp, Elapsed(s), CO2_Waveform(kPa), FetCO2(kPa), FiCO2(kPa), RR(bpm), O2(%), Volume(mL), Volume(ADC), Pump_Running, Leak_Detected, Occlusion_Detected, Status1, Status2, Format`. The *Swedish Excel* style uses `;`, decimal commas and a UTF-8 BOM. Files are saved through `showSaveFilePicker` where available, otherwise downloaded.
+
+**Other features:**
+- Start pump (`0xA5`) and zero calibration (`0x5A`, with confirmation) are written to the port.
+- Dark and light themes. The theme, baud rate and CSV style are remembered in `localStorage`.
+- Stale-data indication after 2 s without frames.
+- `#demo` in the URL generates synthetic LabVIEW frames through the same parser.
+
 ---
 
 ## 7. WiFi and web interface
@@ -561,6 +598,7 @@ BOOT button, web radio buttons, or `GET /api/setFormat?format=0` (legacy) / `1` 
 |---|---|
 | `GET /` | Dashboard HTML, embedded in `WiFiManager.cpp` (`getIndexHTML()`) |
 | `GET /chart.min.js` | Chart.js, **gzip-compressed and embedded** (`include/ChartJS.h`), so no internet is needed |
+| `GET /monitor.html` | The PC monitor page (§6.4), gzip-embedded (`include/MonitorPage.h`, generated at build). Sent with `Content-Disposition: attachment` so the browser saves it as `Eaglehagen_Serial_Monitor.html`. |
 | `WS /ws` | Pushes JSON at 8 Hz; accepts `{"cmd":"start_pump"}` / `{"cmd":"zero_cal"}` |
 | `GET /data` | Current values as JSON |
 | `POST /command` | Form field `cmd=start_pump|zero_cal` |
@@ -593,6 +631,7 @@ CO₂ fields are in **mmHg**. The browser converts them to kPa.
 │ [Start Pump] [Zero Calibration] [Save CSV] [Save JSON] [Clear Data] │
 │ USB Host Output Format (10 Hz): (•) Legacy (LabVIEW) ( ) Tab-Separated ASCII │
 │ Data Points: n / 960 (2 min buffer) | Duration m:ss                 │
+│ PC monitor page (USB) – save it, open in Chrome/Edge     [Download] │
 └─────────────────────────────────────────────────────────┘
 ```
 - Status badges: Connected/Reconnecting reflects the WebSocket state, with auto-reconnect every 3 s. Pump/Leak/Occl turn red with a pulse animation on alarm (`Pump!`, `Leak!`, `Occl!`).
@@ -691,6 +730,7 @@ Calibration is currently compile-time only. A web calibration page or Preference
 platform = https://github.com/pioarduino/platform-espressif32/releases/download/53.03.10/platform-espressif32.zip
 board = lilygo-t-display-s3
 framework = arduino
+extra_scripts = pre:scripts/embed_monitor_page.py   ; embeds the PC monitor page (§6.4)
 build_flags =
     -DUSER_SETUP_LOADED=1
     -include $PROJECT_INCLUDE_DIR/TFT_eSPI_Setup.h
@@ -728,16 +768,19 @@ PlatformIO does not track force-included headers. After changing `TFT_eSPI_Setup
 | AsyncTCP 3.3.2 (commit `ef448a8`) | GitHub URL | Dependency of ESPAsyncWebServer | LGPL-3.0 |
 | WiFi.h, ESPmDNS.h, DNSServer.h, esp_adc/adc_cali.h, HardwareSerial, Arduino.h | ESP32 Arduino core 3.1.0 | Built in | Apache-2.0 |
 
-Approximate footprint: libraries use about 145 KB flash and 37 KB RAM, application about 30–50 KB flash and 10–20 KB RAM, plus the embedded Chart.js (about 69 KB gzip). The board has 16 MB flash and 512 KB SRAM, so there's plenty of room.
+Measured footprint (2026-09-27 build): **1.23 MB flash** (18.7 % of the 6.5 MB application partition) and **49 KB static RAM** (15 %). Embedded assets: Chart.js about 69 KB gzip, the PC monitor page about 28 KB gzip. The board has 16 MB flash and 512 KB SRAM, so there's plenty of room.
 
 Library links: TFT_eSPI https://github.com/Bodmer/TFT_eSPI · ESPAsyncWebServer https://github.com/me-no-dev/ESPAsyncWebServer · AsyncTCP https://github.com/me-no-dev/AsyncTCP · ArduinoJson https://arduinojson.org · ESP32 core https://github.com/espressif/arduino-esp32 · T-Display S3 https://github.com/Xinyuan-LilyGO/T-Display-S3 · Forum https://www.esp32.com
 
 ### 10.4 Arduino IDE (alternative)
 
-1. Boards Manager URL `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`, then install "esp32 by Espressif Systems" (≥ 2.0.0).
+PlatformIO is the supported build. The Arduino IDE can work, with these differences:
+
+1. Boards Manager URL `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`, then install "esp32 by Espressif Systems" **3.1.0** (core 3.x is required: the ADC code uses `adc_cali`, and the DNS responder uses the async `DNSServer`).
 2. Board settings: "LilyGO T-Display S3" or "ESP32S3 Dev Module". USB CDC On Boot: Enabled. CPU 240 MHz. Flash QIO 80 MHz, 16 MB. PSRAM: OPI. USB Mode: Hardware CDC and JTAG. Upload 921600.
 3. Install TFT_eSPI and ArduinoJson from the Library Manager. Add ESPAsyncWebServer and AsyncTCP as .ZIP libraries from GitHub.
-4. Configure TFT_eSPI as in §10.2.
+4. The IDE can't pass `-include`, so select the display setup in the library itself: in `TFT_eSPI/User_Setup_Select.h`, enable `#include <User_Setups/Setup206_LilyGo_T_Display_S3.h>` and comment out the default.
+5. The IDE doesn't run `scripts/embed_monitor_page.py`, so `include/MonitorPage.h` must exist before compiling. Build once with PlatformIO to generate it, or remove the `/monitor.html` route.
 
 ### 10.5 Fallbacks if a library causes trouble
 
@@ -760,7 +803,9 @@ Library links: TFT_eSPI https://github.com/Bodmer/TFT_eSPI · ESPAsyncWebServer 
   ws.send(JSON.stringify({cmd: 'start_pump'}));
   ```
 - **Display test:** inject a fake `CO2Data` (e.g. waveform 38, RR 16, status2 0) into `displayManager.updateAll()`.
-- `test/` is currently empty. Planned unit tests cover the parser (checksum, sync recovery, EtCO₂ peak detection) and the output formatters.
+- **PC monitor page parser:** `node tools/tests/test_monitor_parser.js` (§6.4).
+- **Firmware:** `test/` is currently empty. Planned unit tests cover the MaCO2 parser (checksum, sync recovery, EtCO₂ peak detection) and the output formatters.
+- **End-to-end USB check** used during development: read COM3 for 20 s and confirm that every frame is 24 bytes starting with ESC, with no bytes outside frames.
 
 ### 11.2 Troubleshooting
 
@@ -775,7 +820,9 @@ Library links: TFT_eSPI https://github.com/Bodmer/TFT_eSPI · ESPAsyncWebServer 
 | Frequent `# Checksum error` / sync lost | Noise or level-shifter problem, baud mismatch, ground loop |
 | ADC values wrong | Dividers (5 V sensors), calibration constants, raw values via `printStatus()` |
 | WiFi AP missing | Board stuck in boot mode (GPIO0 held at reset); check serial log |
-| LabVIEW gets no data | Charge-only cable; wrong COM port; port held by the PIO monitor; `setOutputEnabled(true)`; no valid sensor data (output is sent only when `valid`) |
+| LabVIEW gets no data | Charge-only cable; wrong COM port; port held by another program (PIO monitor, the PC monitor page); `setOutputEnabled(true)`; no valid sensor data (output is sent only when `valid`) |
+| `pio run -t upload` fails: "could not open port … Access denied" | Another program holds COM3 (PC monitor page, LabVIEW, serial monitor). Disconnect it, then upload. |
+| Web page has no Download button after flashing | Browser cache: reload with Ctrl+F5 |
 | Moisture / invalid readings | Water trap saturated; cannula or sample line |
 
 ---
@@ -787,7 +834,7 @@ Merged from all earlier roadmaps:
 - Web-based calibration page (O₂ two-point, volume scale/offset).
 - WiFi station mode or configuration portal.
 - On-device alarms with thresholds (EtCO₂/RR high and low, no CO₂ detected, pump stopped), shown on the LCD and web page.
-- SD-card or flash logging for recordings longer than 2 minutes. `DataLogger::enableCSVLogging` is a stub.
+- On-device logging (SD card or flash) for recordings without a connected PC. Long recordings over USB are already possible with the PC monitor page (§6.4). `DataLogger::enableCSVLogging` is a stub.
 - MQTT or export to hospital systems. Cloud logging and trend analysis.
 - BLE or native mobile app. Multi-sensor or multi-patient support.
 - Battery (18650) power with monitoring.
@@ -826,4 +873,6 @@ Statements from the earlier documents that no longer match the firmware. They're
 | TFT_eSPI configured by editing the library's `User_Setup_Select.h` | Project file `include/TFT_eSPI_Setup.h`, force-included via build flags (§10.2) |
 | ADC voltage via legacy `esp_adc_cal` | `adc_cali` curve fitting. The legacy API crash-looped the board at boot on Arduino core 3.x (§2.5). |
 | For LabVIEW, connect USB-Serial to UART2 | LabVIEW uses the **USB-C CDC port** |
+| Long recordings need a separate logging program | The PC monitor page records over USB without a time limit (§6.4) |
+| PC monitor page only available as a separate file | Embedded in the firmware and downloadable from the web page (`/monitor.html`) |
 | Class names `MedAirParser`, `WaveformBuffer`, `CO2WebServer`, `Config.h` (design phase) | Implemented as `MaCO2Parser`, `DisplayManager` (internal buffer), `WiFiManager`, constants in `main.cpp` |
