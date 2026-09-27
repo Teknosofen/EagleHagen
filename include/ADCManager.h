@@ -6,7 +6,10 @@
 #define ADC_MANAGER_H
 
 #include <Arduino.h>
-#include <esp_adc_cal.h>
+// New ESP-IDF 5 calibration API. The legacy esp_adc_cal API must not be used: linking it
+// together with the driver behind analogRead() aborts at boot (ADC driver conflict).
+#include <esp_adc/adc_cali.h>
+#include <esp_adc/adc_cali_scheme.h>
 #include "MaCO2Parser.h"  // For CO2Data structure
 
 class ADCManager {
@@ -47,7 +50,7 @@ private:
     uint8_t _volPin;
     
     // ADC calibration
-    esp_adc_cal_characteristics_t _adcChars;
+    adc_cali_handle_t _adcCali;  // nullptr if curve-fitting calibration is unavailable
     
     // Current readings
     uint16_t _o2_raw;

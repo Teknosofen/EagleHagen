@@ -2,6 +2,7 @@
 // Implementation of MaCO2 sensor communication protocol
 
 #include "MaCO2Parser.h"
+#include "DebugLog.h"
 
 MaCO2Parser::MaCO2Parser()
     : _state(WAIT_FOR_DATA)
@@ -17,7 +18,7 @@ MaCO2Parser::MaCO2Parser()
 }
 
 bool MaCO2Parser::initialize(HardwareSerial& serial, unsigned long timeout_ms) {
-    Serial.println("Initializing MaCO2 sensor...");
+    DebugOut.println("Initializing MaCO2 sensor...");
     
     // Flush any old data
     while (serial.available()) {
@@ -31,32 +32,32 @@ bool MaCO2Parser::initialize(HardwareSerial& serial, unsigned long timeout_ms) {
     while (millis() - startTime < timeout_ms) {
         if (serial.available()) {
             uint8_t byte = serial.read();
-            Serial.printf("Init byte received: 0x%02X\n", byte);
+            DebugOut.printf("Init byte received: 0x%02X\n", byte);
             
             if (byte == 0x06) {
                 // Send acknowledgment (ESC = 0x1B)
                 serial.write(0x1B);
                 serial.flush();  // Ensure it's sent
-                Serial.println("MaCO2 start byte received, sent ACK (0x1B)");
+                DebugOut.println("MaCO2 start byte received, sent ACK (0x1B)");
                 
                 delay(50);  // Give sensor time to respond
                 
                 // Read and discard 7 initialization bytes
                 int discarded = 0;
                 unsigned long ackTime = millis();
-                Serial.print("Reading init bytes: ");
+                DebugOut.print("Reading init bytes: ");
                 while (discarded < 7 && (millis() - ackTime < 2000)) {
                     if (serial.available()) {
                         uint8_t initByte = serial.read();
-                        Serial.printf("0x%02X ", initByte);
+                        DebugOut.printf("0x%02X ", initByte);
                         discarded++;
                     }
                     delay(10);
                 }
-                Serial.println();
+                DebugOut.println();
                 
                 if (discarded == 7) {
-                    Serial.println("MaCO2 sensor initialized successfully");
+                    DebugOut.println("MaCO2 sensor initialized successfully");
                     _state = WAIT_FOR_DATA;
                     
                     // Flush any remaining bytes
@@ -67,7 +68,7 @@ bool MaCO2Parser::initialize(HardwareSerial& serial, unsigned long timeout_ms) {
                     
                     return true;
                 } else {
-                    Serial.printf("Failed to read initialization bytes (got %d/7)\n", discarded);
+                    DebugOut.printf("Failed to read initialization bytes (got %d/7)\n", discarded);
                     _errorCount++;
                     return false;
                 }
@@ -76,7 +77,7 @@ bool MaCO2Parser::initialize(HardwareSerial& serial, unsigned long timeout_ms) {
         delay(100);
     }
     
-    Serial.println("MaCO2 initialization timeout");
+    DebugOut.println("MaCO2 initialization timeout");
     _errorCount++;
     return false;
 }
@@ -100,7 +101,7 @@ bool MaCO2Parser::parsePacket(HardwareSerial& serial, CO2Data& data) {
 
     // Log if we're processing multiple packets (indicates buffer buildup)
     if (packetsProcessed > 1) {
-        Serial.printf("# Warning: Processed %d packets in one call (buffer catchup), %d bytes remaining\n",
+        DebugOut.printf("# Warning: Processed %d packets in one call (buffer catchup), %d bytes remaining\n",
                      packetsProcessed, serial.available());
     }
 
@@ -122,7 +123,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
     }
 
     if (syncStartTime > 0 && (now - syncStartTime) > 5000) {
-        Serial.println("# Sync search timeout - flushing buffer and restarting");
+        DebugOut.println("# Sync search timeout - flushing buffer and restarting");
         while (serial.available()) {
             serial.read();
         }
@@ -144,7 +145,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
                     // Only print sync message once when entering sync mode
                     static bool syncMessagePrinted = false;
                     if (!syncMessagePrinted) {
-                        Serial.println("# === SYNC LOST - Searching using 0x06 header + checksum ===");
+                        DebugOut.println("# === SYNC LOST - Searching using 0x06 header + checksum ===");
                         syncMessagePrinted = true;
                     }
 
@@ -186,7 +187,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
 
                             if (sum == expected_checksum && rr_test <= 60 && co2_reasonable) {
                                 // Found valid packet!
-                                Serial.printf("# Found sync at offset %d: header=0x06, RR=%d, FCO2=%d, FetCO2=%d, checksum=0x%02X OK\n",
+                                DebugOut.printf("# Found sync at offset %d: header=0x06, RR=%d, FCO2=%d, FetCO2=%d, checksum=0x%02X OK\n",
                                             offset, rr_test, fco2_test, fetco2_test, expected_checksum);
 
                                 // Copy to rx buffer and process
@@ -235,7 +236,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
                     bool rr_valid = (_rxBuffer.rr <= 60);  // RR can be 0-60 (0 is valid when sampling ambient air)
 
                     if (!checksum_valid) {
-                        Serial.printf("# Checksum fail: calc=0x%02X got=0x%02X\n",
+                        DebugOut.printf("# Checksum fail: calc=0x%02X got=0x%02X\n",
                                     calculated_checksum, _rxBuffer.checksum);
                         consecutiveErrors++;
                         _state = WAIT_FOR_DATA;
@@ -245,7 +246,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
                     }
 
                     if (!header_valid) {
-                        Serial.printf("# Header fail: d[0]=0x%02X (expected 0x06)\n", _rxBuffer.status1);
+                        DebugOut.printf("# Header fail: d[0]=0x%02X (expected 0x06)\n", _rxBuffer.status1);
                         consecutiveErrors++;
                         _state = WAIT_FOR_DATA;
                         _rxIndex = 0;
@@ -254,7 +255,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
                     }
 
                     if (!rr_valid) {
-                        Serial.printf("# RR fail: %d (must be 0-60)\n", _rxBuffer.rr);
+                        DebugOut.printf("# RR fail: %d (must be 0-60)\n", _rxBuffer.rr);
                         consecutiveErrors++;
                         _state = WAIT_FOR_DATA;
                         _rxIndex = 0;
@@ -264,7 +265,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
 
                     // Additional sanity check on CO2 values
                     if (_rxBuffer.fco2_wave > 50 || _rxBuffer.fetco2 > 120) {
-                        Serial.printf("# CO2 values out of range: FCO2=%d, FetCO2=%d\n",
+                        DebugOut.printf("# CO2 values out of range: FCO2=%d, FetCO2=%d\n",
                                     _rxBuffer.fco2_wave, _rxBuffer.fetco2);
                         consecutiveErrors++;
                         _state = WAIT_FOR_DATA;
@@ -288,7 +289,7 @@ bool MaCO2Parser::readPacket(HardwareSerial& serial) {
     if (_state == READING_PACKET && 
         _lastPacketTime > 0 && 
         (millis() - _lastPacketTime) > 2000) {
-        Serial.println("MaCO2 packet timeout - resyncing");
+        DebugOut.println("MaCO2 packet timeout - resyncing");
         consecutiveErrors++;
         _state = WAIT_FOR_DATA;
         _rxIndex = 0;
@@ -310,7 +311,7 @@ void MaCO2Parser::decodePacket(const MaCO2Packet& packet, CO2Data& data) {
 
     // Validate packet
     if (!checksum_valid) {
-        Serial.printf("# Checksum error: calc=0x%02X got=0x%02X\n",
+        DebugOut.printf("# Checksum error: calc=0x%02X got=0x%02X\n",
                      calculated_checksum, packet.checksum);
         _errorCount++;
         data.valid = false;
@@ -318,7 +319,7 @@ void MaCO2Parser::decodePacket(const MaCO2Packet& packet, CO2Data& data) {
     }
 
     if (packet.rr > 60) {  // RR > 60 is physiologically impossible
-        Serial.printf("# Packet sync error: RR=%d (resetting)\n", packet.rr);
+        DebugOut.printf("# Packet sync error: RR=%d (resetting)\n", packet.rr);
         _state = WAIT_FOR_DATA;
         _rxIndex = 0;
         _errorCount++;
@@ -365,7 +366,7 @@ void MaCO2Parser::decodePacket(const MaCO2Packet& packet, CO2Data& data) {
 
 void MaCO2Parser::sendCommand(HardwareSerial& serial, MaCO2Command cmd) {
     serial.write((uint8_t)cmd);
-    Serial.printf("Sent MaCO2 command: 0x%02X\n", cmd);
+    DebugOut.printf("Sent MaCO2 command: 0x%02X\n", cmd);
 }
 
 bool MaCO2Parser::isPumpRunning(const CO2Data& data) const {

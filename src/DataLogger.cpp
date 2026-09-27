@@ -2,6 +2,7 @@
 // Implementation of data logging with multiple output formats
 
 #include "DataLogger.h"
+#include "DebugLog.h"
 
 DataLogger::DataLogger()
     : _outputFormat(FORMAT_LEGACY_LABVIEW)
@@ -13,9 +14,21 @@ DataLogger::DataLogger()
 }
 
 bool DataLogger::begin() {
-    Serial.println("DataLogger initialized");
-    Serial.println("Tab-separated ASCII output enabled (default)");
+    updateDebugOutput();
+    DebugOut.println("DataLogger initialized");
+    DebugOut.printf("Host output format: %s\n",
+                    _outputFormat == FORMAT_LEGACY_LABVIEW ? "Legacy LabVIEW" : "Tab-separated ASCII");
     return true;
+}
+
+void DataLogger::setOutputFormat(OutputFormat format) {
+    _outputFormat = format;
+    updateDebugOutput();
+}
+
+void DataLogger::updateDebugOutput() {
+    // Diagnostics would corrupt the fixed-length LabVIEW frames on the shared USB port
+    DebugOut.setEnabled(!_outputEnabled || _outputFormat != FORMAT_LEGACY_LABVIEW);
 }
 
 void DataLogger::sendData(Stream& stream, const CO2Data& data) {
@@ -71,13 +84,14 @@ void DataLogger::sendTabSeparated(Stream& stream, const CO2Data& data) {
 
 void DataLogger::setOutputEnabled(bool enabled) {
     _outputEnabled = enabled;
-    Serial.printf("Host output %s\n", enabled ? "enabled" : "disabled");
+    updateDebugOutput();
+    DebugOut.printf("Host output %s\n", enabled ? "enabled" : "disabled");
 }
 
 void DataLogger::enableCSVLogging(bool enabled) {
     _csvEnabled = enabled;
     // TODO: Implement CSV file logging
-    Serial.printf("CSV logging %s (not yet implemented)\n", 
+    DebugOut.printf("CSV logging %s (not yet implemented)\n", 
                   enabled ? "enabled" : "disabled");
 }
 
@@ -90,32 +104,28 @@ void DataLogger::formatPICPacket(char* buffer, size_t bufferSize, const CO2Data&
     // Format matches original PIC output:
     // <ESC>ABC<TAB>DEFGH<TAB>IJKLM<TAB>[Status1][Status2][RR][FCO2][FetCO2]<CR><LF>
     //
-    // Where:
-    //  ABC    = CO2 waveform scaled (3 digits, 53 = 5.3 kPa)
-    //  DEFGH  = O2 scaled (5 digits, 201 = 20.1%)
-    //  IJKLM  = Volume ADC (5 digits, 0-1023)
-    //  Status1 = Status byte 1
+    // Where (units as expected by the existing LabVIEW program, unchanged since the PIC):
+    //  ABC    = CO2 waveform in mmHg (3 digits); LabVIEW divides by 7.60 to get %
+    //  DEFGH  = O2 in 0.1 % (5 digits, 209 = 20.9 %); LabVIEW divides by 10
+    //  IJKLM  = Volume ADC (5 digits, 0-1023); LabVIEW divides by ADC_counts/liter
+    //  Status1 = Status byte 1 (6 = data valid)
     //  Status2 = Status byte 2 (with zero replacement)
     //  RR      = Respiratory rate (with zero replacement)
-    //  FCO2    = FiCO2 scaled (byte, 4 = 0.4 kPa)
-    //  FetCO2  = End-tidal CO2 scaled (byte, 53 = 5.3 kPa)
+    //  FiCO2   = Inspired CO2 in mmHg (byte, with zero replacement)
+    //  FetCO2  = End-tidal CO2 in mmHg (byte, with zero replacement)
     //
-    // All CO2 fields: mmHg * 0.133322 * 10 = kPa * 10 (one implicit decimal)
-
-    int co2_scaled    = (int)(data.co2_waveform * 1.33322f);  // mmHg → kPa * 10
-    uint8_t fco2_scaled  = (uint8_t)(data.fco2  * 1.33322f);  // mmHg → kPa * 10
-    uint8_t fetco2_scaled = (uint8_t)(data.fetco2 * 1.33322f); // mmHg → kPa * 10
+    // Frame is always 24 bytes; LabVIEW reads fixed 24-byte blocks.
 
     snprintf(buffer, bufferSize,
         "\x1B%03d\t%05d\t%05d\t%c%c%c%c%c\r\n",
-        co2_scaled,
+        (int)data.co2_waveform,
         (int)(data.o2_percent * 10.0f),
         data.vol_adc,
         data.status1,
         replaceZero(data.status2, 128),
         replaceZero(data.respiratory_rate, 255),
-        replaceZero(fco2_scaled, 255),
-        replaceZero(fetco2_scaled, 255)
+        replaceZero(data.fco2, 255),
+        replaceZero(data.fetco2, 255)
     );
 }
 

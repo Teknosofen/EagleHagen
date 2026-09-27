@@ -3,6 +3,8 @@
 
 #include "WiFiManager.h"
 #include "ChartJS.h"
+#include "DebugLog.h"
+#include <ESPmDNS.h>
 
 // Store pointer for static callback
 static WiFiManager* _instance = nullptr;
@@ -16,6 +18,7 @@ WiFiManager::WiFiManager(uint16_t port)
     , _cmdQueueHead(0)
     , _cmdQueueTail(0)
     , _dataLogger(nullptr)
+    , _dnsRunning(false)
 {
     _instance = this;
     memset(_cmdQueue, 0, sizeof(_cmdQueue));
@@ -28,7 +31,7 @@ WiFiManager::~WiFiManager() {
 }
 
 bool WiFiManager::beginAP(const char* ssid, const char* password) {
-    Serial.println("Starting WiFi Access Point...");
+    DebugOut.println("Starting WiFi Access Point...");
     
     _isAP = true;
     
@@ -41,19 +44,19 @@ bool WiFiManager::beginAP(const char* ssid, const char* password) {
     }
     
     if (!success) {
-        Serial.println("Failed to start AP");
+        DebugOut.println("Failed to start AP");
         return false;
     }
     
     IPAddress ip = WiFi.softAPIP();
-    Serial.printf("AP Started: SSID='%s'\n", ssid);
-    Serial.printf("IP Address: %s\n", ip.toString().c_str());
+    DebugOut.printf("AP Started: SSID='%s'\n", ssid);
+    DebugOut.printf("IP Address: %s\n", ip.toString().c_str());
     
     return true;
 }
 
 bool WiFiManager::beginStation(const char* ssid, const char* password, unsigned long timeout_ms) {
-    Serial.printf("Connecting to WiFi: %s\n", ssid);
+    DebugOut.printf("Connecting to WiFi: %s\n", ssid);
     
     _isAP = false;
     WiFi.mode(WIFI_STA);
@@ -62,22 +65,22 @@ bool WiFiManager::beginStation(const char* ssid, const char* password, unsigned 
     unsigned long startTime = millis();
     while (WiFi.status() != WL_CONNECTED && (millis() - startTime) < timeout_ms) {
         delay(500);
-        Serial.print(".");
+        DebugOut.print(".");
     }
-    Serial.println();
+    DebugOut.println();
     
     if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("Failed to connect to WiFi");
+        DebugOut.println("Failed to connect to WiFi");
         return false;
     }
     
-    Serial.printf("Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+    DebugOut.printf("Connected! IP: %s\n", WiFi.localIP().toString().c_str());
     return true;
 }
 
 bool WiFiManager::startServer() {
     if (_serverRunning) {
-        Serial.println("Server already running");
+        DebugOut.println("Server already running");
         return true;
     }
     
@@ -127,15 +130,39 @@ bool WiFiManager::startServer() {
     _server->begin();
     _serverRunning = true;
     
-    Serial.println("Web server started");
+    DebugOut.println("Web server started");
     return true;
+}
+
+bool WiFiManager::beginHostname(const char* hostname) {
+    String fqdn = String(hostname) + ".local";
+
+    // mDNS: resolves <hostname>.local on Windows, macOS, iOS and Linux
+    bool mdnsOk = MDNS.begin(hostname);
+    if (mdnsOk) {
+        MDNS.addService("http", "tcp", _port);
+        DebugOut.printf("mDNS started: http://%s\n", fqdn.c_str());
+    } else {
+        DebugOut.println("mDNS failed to start");
+    }
+
+    // Many Android devices send .local lookups to the network's DNS server instead of
+    // using mDNS. The AP hands out its own IP as DNS server, so answer that one name here.
+    // Other names get "no such domain", which avoids triggering captive-portal pop-ups.
+    if (_isAP) {
+        _dnsServer.setErrorReplyCode(DNSReplyCode::NonExistentDomain);
+        _dnsRunning = _dnsServer.start(53, fqdn, WiFi.softAPIP());
+        DebugOut.printf("DNS responder for %s %s\n", fqdn.c_str(), _dnsRunning ? "started" : "failed");
+    }
+
+    return mdnsOk || _dnsRunning;
 }
 
 void WiFiManager::stopServer() {
     if (_server && _serverRunning) {
         _server->end();
         _serverRunning = false;
-        Serial.println("Web server stopped");
+        DebugOut.println("Web server stopped");
     }
 }
 
@@ -150,6 +177,9 @@ void WiFiManager::update(const CO2Data& data) {
 void WiFiManager::loop() {
     if (_ws) {
         _ws->cleanupClients();
+    }
+    if (_dnsRunning) {
+        _dnsServer.processNextRequest();  // No-op on async (core 3.x) DNSServer
     }
 }
 
@@ -225,7 +255,7 @@ void WiFiManager::handleSetFormat(AsyncWebServerRequest* request) {
     // Set format via external reference (passed to WiFiManager)
     if (_dataLogger) {
         _dataLogger->setOutputFormat(format == 0 ? FORMAT_LEGACY_LABVIEW : FORMAT_TAB_SEPARATED);
-        Serial.printf("Output format changed to: %s\n", 
+        DebugOut.printf("Output format changed to: %s\n", 
                      format == 0 ? "Legacy LabVIEW" : "Tab-Separated ASCII");
         request->send(200, "text/plain", "OK");
     } else {
@@ -241,12 +271,12 @@ void WiFiManager::onWebSocketEvent(AsyncWebSocket* server, AsyncWebSocketClient*
                                    AwsEventType type, void* arg, uint8_t* data, size_t len) {
     switch (type) {
         case WS_EVT_CONNECT:
-            Serial.printf("WebSocket client #%u connected from %s\n", 
+            DebugOut.printf("WebSocket client #%u connected from %s\n", 
                          client->id(), client->remoteIP().toString().c_str());
             break;
             
         case WS_EVT_DISCONNECT:
-            Serial.printf("WebSocket client #%u disconnected\n", client->id());
+            DebugOut.printf("WebSocket client #%u disconnected\n", client->id());
             break;
             
         case WS_EVT_DATA: {
@@ -295,6 +325,11 @@ String WiFiManager::dataToJson(const CO2Data& data) {
     doc["pump_running"] = (data.status2 & 0x01) == 0;  // 0=running, 1=stopped
     doc["leak_detected"] = (data.status2 & 0x02) != 0;
     doc["occlusion_detected"] = (data.status2 & 0x04) != 0;
+
+    // Current host output format, so the web page can show the real setting
+    if (_dataLogger) {
+        doc["output_format"] = (int)_dataLogger->getOutputFormat();  // 0=Legacy, 1=TabSep
+    }
     
     String output;
     serializeJson(doc, output);
@@ -306,9 +341,9 @@ void WiFiManager::enqueueCommand(uint8_t cmd) {
     if (nextHead != _cmdQueueTail) {
         _cmdQueue[_cmdQueueHead] = cmd;
         _cmdQueueHead = nextHead;
-        Serial.printf("Command enqueued: 0x%02X\n", cmd);
+        DebugOut.printf("Command enqueued: 0x%02X\n", cmd);
     } else {
-        Serial.println("Command queue full!");
+        DebugOut.println("Command queue full!");
     }
 }
 
@@ -596,17 +631,17 @@ String WiFiManager::getIndexHTML() {
         
         <!-- Output Format Selection -->
         <div style="margin: 12px auto; max-width: 550px; padding: 10px; background: #f5f5f5; border-radius: 6px;">
-            <div style="font-weight: bold; margin-bottom: 8px; color: #184D7B; font-size: 0.85em;">Host Output Format (8Hz @ 115200 baud)</div>
+            <div style="font-weight: bold; margin-bottom: 8px; color: #184D7B; font-size: 0.85em;">USB Host Output Format (10 Hz)</div>
             <div style="display: flex; gap: 10px; align-items: center;">
                 <label style="flex: 1; cursor: pointer; padding: 8px; background: white; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85em;">
-                    <input type="radio" name="outputFormat" value="legacy" onchange="setOutputFormat(0)">
+                    <input type="radio" name="outputFormat" id="formatLegacy" value="legacy" onchange="setOutputFormat(0)">
                     <strong>Legacy (LabVIEW)</strong><br>
-                    <small style="color: #666;">Binary format with ADC values</small>
+                    <small style="color: #666;">PIC-compatible frames for LabVIEW</small>
                 </label>
                 <label style="flex: 1; cursor: pointer; padding: 8px; background: white; border: 2px solid #ddd; border-radius: 4px; font-size: 0.85em;">
-                    <input type="radio" name="outputFormat" value="tabsep" checked onchange="setOutputFormat(1)">
+                    <input type="radio" name="outputFormat" id="formatTabSep" value="tabsep" onchange="setOutputFormat(1)">
                     <strong>Tab-Separated ASCII</strong><br>
-                    <small style="color: #666;">Status, RR, FCO2, FetCO2</small>
+                    <small style="color: #666;">CO2 kPa, O2 %, RR, Volume, Status</small>
                 </label>
             </div>
         </div>
@@ -698,6 +733,7 @@ String WiFiManager::getIndexHTML() {
             // Update status indicators
             updateStatus('pumpStatus', data.pump_running, 'Pump', 'Pump!');
             updateStatus('leakStatus', !data.leak_detected, 'Leak', 'Leak!');
+            updateFormatSelection(data.output_format);
             updateStatus('occlusionStatus', !data.occlusion_detected, 'Occl', 'Occl!');
             
             // Get current time
@@ -790,6 +826,13 @@ String WiFiManager::getIndexHTML() {
             }
         }
         
+        // Reflect the device's actual format (it can also be changed with the BOOT button)
+        function updateFormatSelection(format) {
+            if (format === undefined) return;
+            document.getElementById('formatLegacy').checked = (format === 0);
+            document.getElementById('formatTabSep').checked = (format === 1);
+        }
+
         function setOutputFormat(format) {
             fetch('/api/setFormat?format=' + format)
                 .then(response => response.text())

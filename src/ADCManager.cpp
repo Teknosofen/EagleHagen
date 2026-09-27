@@ -2,6 +2,7 @@
 // Implementation of ADC management for analog sensors
 
 #include "ADCManager.h"
+#include "DebugLog.h"
 
 ADCManager::ADCManager(uint8_t o2_pin, uint8_t vol_pin)
     : _o2Pin(o2_pin)
@@ -15,6 +16,7 @@ ADCManager::ADCManager(uint8_t o2_pin, uint8_t vol_pin)
     , _o2FilterBuffer(nullptr)
     , _volFilterBuffer(nullptr)
     , _filterIndex(0)
+    , _adcCali(nullptr)
 {
     // Default O2 calibration (0-3.3V = 0-100% O2, linear)
     _o2Cal.v_at_0_percent = 0.0;
@@ -26,15 +28,22 @@ ADCManager::ADCManager(uint8_t o2_pin, uint8_t vol_pin)
 }
 
 bool ADCManager::begin() {
-    Serial.println("Initializing ADC Manager...");
+    DebugOut.println("Initializing ADC Manager...");
     
     // Configure ADC resolution and attenuation
     analogReadResolution(12);       // 12-bit resolution (0-4095)
     analogSetAttenuation(ADC_11db); // 0-3.3V range
     
-    // Characterize ADC for better accuracy
-    esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, 
-                            ADC_WIDTH_BIT_12, 1100, &_adcChars);
+    // Curve-fitting calibration (eFuse based) for accurate raw -> mV conversion
+    adc_cali_curve_fitting_config_t caliConfig = {};
+    caliConfig.unit_id = ADC_UNIT_1;
+    caliConfig.chan = ADC_CHANNEL_0;
+    caliConfig.atten = ADC_ATTEN_DB_12;  // Same as ADC_11db (0-3.1 V)
+    caliConfig.bitwidth = ADC_BITWIDTH_12;
+    if (adc_cali_create_scheme_curve_fitting(&caliConfig, &_adcCali) != ESP_OK) {
+        _adcCali = nullptr;
+        DebugOut.println("ADC calibration unavailable - using linear conversion");
+    }
     
     // Configure pins as inputs
     pinMode(_o2Pin, INPUT);
@@ -46,7 +55,7 @@ bool ADCManager::begin() {
         _volFilterBuffer = new uint16_t[_filterSize];
         
         if (!_o2FilterBuffer || !_volFilterBuffer) {
-            Serial.println("Failed to allocate filter buffers");
+            DebugOut.println("Failed to allocate filter buffers");
             return false;
         }
         
@@ -60,7 +69,7 @@ bool ADCManager::begin() {
         }
     }
     
-    Serial.println("ADC Manager initialized");
+    DebugOut.println("ADC Manager initialized");
     return true;
 }
 
@@ -94,14 +103,14 @@ void ADCManager::update(CO2Data& data) {
 void ADCManager::setO2Calibration(float voltage_at_0_percent, float voltage_at_100_percent) {
     _o2Cal.v_at_0_percent = voltage_at_0_percent;
     _o2Cal.v_at_100_percent = voltage_at_100_percent;
-    Serial.printf("O2 calibration set: 0%%=%0.3fV, 100%%=%0.3fV\n", 
+    DebugOut.printf("O2 calibration set: 0%%=%0.3fV, 100%%=%0.3fV\n", 
                   voltage_at_0_percent, voltage_at_100_percent);
 }
 
 void ADCManager::setVolumeCalibration(float ml_per_volt, float offset_ml) {
     _volCal.ml_per_volt = ml_per_volt;
     _volCal.offset_ml = offset_ml;
-    Serial.printf("Volume calibration set: %0.1f mL/V, offset=%0.1f mL\n",
+    DebugOut.printf("Volume calibration set: %0.1f mL/V, offset=%0.1f mL\n",
                   ml_per_volt, offset_ml);
 }
 
@@ -135,8 +144,11 @@ uint16_t ADCManager::readADC(uint8_t pin) {
 
 float ADCManager::rawToVoltage(uint16_t raw) {
     // Use ESP32 calibration for accurate voltage
-    uint32_t voltage_mv = esp_adc_cal_raw_to_voltage(raw, &_adcChars);
-    return voltage_mv / 1000.0;  // Convert mV to V
+    int voltage_mv;
+    if (_adcCali && adc_cali_raw_to_voltage(_adcCali, raw, &voltage_mv) == ESP_OK) {
+        return voltage_mv / 1000.0;  // Convert mV to V
+    }
+    return raw * 3.1f / 4095.0f;  // Uncalibrated fallback (full scale ~3.1 V at 11 dB)
 }
 
 float ADCManager::voltageToO2Percent(float voltage) {

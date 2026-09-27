@@ -2,6 +2,7 @@
 // Implementation of TFT display management for LilyGO T-Display S3
 
 #include "DisplayManager.h"
+#include "DebugLog.h"
 
 // Layout constants for status section
 static const uint8_t STATUS_SEPARATOR_Y = 24;
@@ -56,7 +57,7 @@ DisplayManager::DisplayManager()
 }
 
 bool DisplayManager::begin() {
-    Serial.println("Initializing TFT display...");
+    DebugOut.println("Initializing TFT display...");
     
     // Enable display power (GPIO 15 controls display power on T-Display S3)
     pinMode(15, OUTPUT);
@@ -72,7 +73,7 @@ bool DisplayManager::begin() {
     digitalWrite(TFT_BL, HIGH);  // Turn on immediately
     setBacklight(_backlightBrightness);
     
-    Serial.println("TFT display initialized");
+    DebugOut.println("TFT display initialized");
     return true;
 }
 

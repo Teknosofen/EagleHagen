@@ -6,6 +6,7 @@
 #define WIFI_MANAGER_H
 
 #include <WiFi.h>
+#include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncWebSocket.h>
 #include <ArduinoJson.h>
@@ -26,6 +27,10 @@ public:
     
     // Start web server
     bool startServer();
+
+    // Make the server reachable as http://<hostname>.local
+    // (mDNS, plus a DNS answer for that name when running as Access Point)
+    bool beginHostname(const char* hostname);
     
     // Stop web server
     void stopServer();
@@ -66,6 +71,10 @@ private:
     
     // DataLogger reference (for format control)
     DataLogger* _dataLogger;
+
+    // Name resolution for <hostname>.local
+    DNSServer _dnsServer;
+    bool _dnsRunning;
     
     // Web server handlers
     void handleRoot(AsyncWebServerRequest* request);

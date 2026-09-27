@@ -32,7 +32,8 @@ public:
     void sendTabSeparated(Stream& stream, const CO2Data& data);
     
     // Format selection
-    void setOutputFormat(OutputFormat format) { _outputFormat = format; }
+    // Also mutes diagnostic text in Legacy LabVIEW format (see DebugLog.h)
+    void setOutputFormat(OutputFormat format);
     OutputFormat getOutputFormat() const { return _outputFormat; }
     
     // Enable/disable host output via USB CDC
@@ -61,6 +62,9 @@ private:
     // Format: <ESC>ABC<TAB>DEFGH<TAB>IJKLM<TAB>[Status1][Status2][RR][FiCO2][FetCO2]<CR><LF>
     void formatPICPacket(char* buffer, size_t bufferSize, const CO2Data& data);
     
+    // Enable/mute diagnostic text to match the current output mode
+    void updateDebugOutput();
+
     // Handle zero replacement (PIC firmware compatibility)
     uint8_t replaceZero(uint8_t value, uint8_t replacement);
 };
