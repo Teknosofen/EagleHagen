@@ -3,6 +3,7 @@
 
 #include "WiFiManager.h"
 #include "ChartJS.h"
+#include "MonitorPage.h"
 #include "DebugLog.h"
 #include <ESPmDNS.h>
 
@@ -119,6 +120,16 @@ bool WiFiManager::startServer() {
         AsyncWebServerResponse* response = request->beginResponse(200, "application/javascript", CHARTJS_GZ, CHARTJS_GZ_LEN);
         response->addHeader("Content-Encoding", "gzip");
         response->addHeader("Cache-Control", "public, max-age=31536000");
+        request->send(response);
+    });
+
+    // Stand-alone PC monitor page (tools/Eaglehagen_Serial_Monitor.html), offered as a download.
+    // It can't run from here: Web Serial needs a secure context, so it must be opened as a local file.
+    _server->on("/monitor.html", HTTP_GET, [](AsyncWebServerRequest* request) {
+        AsyncWebServerResponse* response = request->beginResponse(200, "text/html", MONITOR_PAGE_GZ, MONITOR_PAGE_GZ_LEN);
+        response->addHeader("Content-Encoding", "gzip");
+        response->addHeader("Content-Disposition", "attachment; filename=\"Eaglehagen_Serial_Monitor.html\"");
+        response->addHeader("Cache-Control", "no-cache");
         request->send(response);
     });
 
@@ -648,6 +659,16 @@ String WiFiManager::getIndexHTML() {
 
         <div style="text-align: center; margin-top: 12px; color: #5292BD; font-size: 0.8em;">
             <div>Data Points: <span id="dataCount">0</span> / 960 (2 min buffer) | Duration: <span id="duration">0:00</span></div>
+        </div>
+
+        <!-- PC monitor page download (stand-alone page for USB use) -->
+        <div style="margin: 14px auto 0; max-width: 550px; padding: 10px 12px; background: #f5f5f5; border-radius: 6px; font-size: 0.85em; display: flex; align-items: center; gap: 12px;">
+            <div style="flex: 1; color: #555;">
+                <strong style="color: #184D7B;">PC monitor page (USB)</strong><br>
+                Save it on a PC, then open it in Chrome or Edge to view and record data over the USB cable. Accepts both output formats.
+            </div>
+            <a href="/monitor.html" download="Eaglehagen_Serial_Monitor.html" class="btn-secondary"
+               style="text-decoration: none; padding: 8px 14px; border-radius: 6px; white-space: nowrap;">Download</a>
         </div>
     </div>
     

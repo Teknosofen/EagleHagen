@@ -3,3 +3,6 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+
+# Generated at build time by scripts/embed_monitor_page.py
+include/MonitorPage.h

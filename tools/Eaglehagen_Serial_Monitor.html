@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Örnhagens Monitor – USB</title>
+<style>
+  :root {
+    --bg: #0d1520; --panel: #142131; --panel2: #1a2a3d; --border: #24374d;
+    --text: #e7eef6; --muted: #8ea3b9; --grid: rgba(142,163,185,0.14);
+    --co2: #4fc3f7; --o2: #6fdc8c; --vol: #f6c177; --et: #9ecbff;
+    --ok: #33c47a; --bad: #ff5c5c; --warn: #f0b429; --accent: #5292bd;
+    --btn: #22364d; --btn-hover: #2c4562; --shadow: 0 6px 24px rgba(0,0,0,0.35);
+  }
+  :root[data-theme="light"] {
+    --bg: #f3f6f9; --panel: #ffffff; --panel2: #f6f9fc; --border: #d7e0ea;
+    --text: #1f2933; --muted: #5b6770; --grid: rgba(31,41,51,0.09);
+    --co2: #1f6fb2; --o2: #2e8b57; --vol: #b9770e; --et: #184d7b;
+    --ok: #2e8b57; --bad: #c0392b; --warn: #b9770e; --accent: #184d7b;
+    --btn: #e8f1f8; --btn-hover: #d6e6f3; --shadow: 0 4px 16px rgba(24,77,123,0.08);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif; }
+  body { padding: 18px 22px 28px; max-width: 1500px; margin: 0 auto; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+  header img { height: 52px; border-radius: 6px; background: #fff; padding: 3px; }
+  header h1 { margin: 0; font-family: Cambria, Georgia, serif; font-size: 26px; letter-spacing: 0.2px; }
+  header h1 .by { font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; font-weight: 400;
+    font-style: italic; color: var(--muted); letter-spacing: 0; margin-left: 6px; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  header .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--border); font-size: 13px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .pill.on .dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(51,196,122,0.18); }
+  .pill.stale .dot { background: var(--warn); }
+  .pill.demo { color: var(--warn); }
+  .iconbtn { background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 10px; padding: 7px 11px; cursor: pointer; font-size: 14px; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  .connect { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; margin-bottom: 14px; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; }
+  select { background: var(--panel2); color: var(--text); border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 10px; font-size: 14px; min-width: 120px; }
+  select#port { min-width: 280px; }
+  button { font: inherit; font-size: 14px; font-weight: 600; border-radius: 9px; padding: 9px 16px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--btn); color: var(--text); transition: background .15s; }
+  button:hover:not(:disabled) { background: var(--btn-hover); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { filter: brightness(1.1); background: var(--accent); }
+  button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+  .stats { margin-left: auto; display: flex; gap: 18px; font-size: 13px; color: var(--muted); }
+  .stats b { color: var(--text); font-weight: 600; }
+
+  .banner { padding: 12px 16px; border-radius: 12px; margin-bottom: 14px; font-size: 14px;
+    background: rgba(255,92,92,0.12); border: 1px solid var(--bad); display: none; }
+
+  .alarms { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 10px;
+    font-weight: 700; font-size: 13px; letter-spacing: 0.4px; background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
+  .badge .dot { width: 10px; height: 10px; }
+  .badge.ok { color: var(--ok); border-color: rgba(51,196,122,0.45); }
+  .badge.ok .dot { background: var(--ok); }
+  .badge.bad { color: #fff; background: var(--bad); border-color: var(--bad); animation: pulse 1.2s infinite; }
+  .badge.bad .dot { background: #fff; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,92,92,0.5); } 50% { box-shadow: 0 0 0 7px rgba(255,92,92,0); } }
+
+  .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 14px; }
+  .metric { padding: 14px 16px 12px; position: relative; overflow: hidden; }
+  .metric .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); font-weight: 700;
+    display: flex; align-items: center; gap: 7px; }
+  .metric .label .dot { width: 8px; height: 8px; }
+  .metric .value { font-size: 44px; font-weight: 700; line-height: 1.1; margin-top: 6px; }
+  .metric .unit { font-size: 15px; color: var(--muted); font-weight: 600; margin-left: 4px; }
+  .metric .aux { font-size: 12.5px; color: var(--muted); margin-top: 2px; min-height: 17px; }
+  .metric.stale .value { opacity: 0.35; }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .chart { padding: 12px 14px 8px; }
+  .chart.wide { grid-column: 1 / -1; }
+  .chart .head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .chart .head .title { font-weight: 700; font-size: 14px; }
+  .chart .head .now { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .chart canvas { width: 100%; display: block; }
+  .chart.wide canvas { height: 250px; }
+  .chart:not(.wide) canvas { height: 170px; }
+
+  .bottom { display: grid; grid-template-columns: 1fr 1.6fr; gap: 14px; margin-bottom: 14px; }
+  .panel { padding: 14px 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--muted); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
+  .rec { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  .rec .dot { background: var(--muted); }
+  .rec.on .dot { background: var(--bad); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  .recinfo { font-size: 14px; color: var(--muted); margin-left: 6px; }
+  .recinfo b { color: var(--text); }
+
+  details.log { padding: 10px 16px; }
+  details.log summary { cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 600; }
+  pre#log { max-height: 220px; overflow: auto; font-size: 12px; margin: 10px 0 4px; color: var(--muted);
+    font-family: Consolas, "Cascadia Mono", monospace; white-space: pre-wrap; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+  @media (max-width: 1100px) { .metrics { grid-template-columns: repeat(3, 1fr); } .bottom { grid-template-columns: 1fr; } }
+  @media (max-width: 700px)  { .metrics { grid-template-columns: repeat(2, 1fr); } .charts { grid-template-columns: 1fr; }
+    .stats { margin-left: 0; } select#port { min-width: 200px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="data:image/jpeg;base64,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" alt="Örnhagen logo">
+  <div>
+    <h1>Örnhagens Monitor <span class="by">by Teknosofen</span></h1>
+    <div class="sub">Eaglehagen CO₂ monitor · USB serial connection</div>
+  </div>
+  <div class="spacer"></div>
+  <span id="connPill" class="pill"><span class="dot"></span><span id="connText">Not connected</span></span>
+  <button class="iconbtn" id="themeBtn" title="Switch light / dark">◐</button>
+</header>
+
+<div class="banner" id="noSerial">
+  This browser cannot open serial ports. Please open this page in <b>Google Chrome</b> or <b>Microsoft Edge</b> (desktop).
+</div>
+
+<section class="alarms">
+  <span class="badge" id="bValid"><span class="dot"></span>DATA VALID</span>
+  <span class="badge" id="bPump"><span class="dot"></span>PUMP</span>
+  <span class="badge" id="bLeak"><span class="dot"></span>LEAK</span>
+  <span class="badge" id="bOccl"><span class="dot"></span>OCCLUSION</span>
+</section>
+
+<section class="metrics">
+  <div class="card metric" id="mEt">
+    <div class="label"><span class="dot" style="background:var(--et)"></span>End-tidal CO₂</div>
+    <div><span class="value num" id="vEt">--</span><span class="unit">kPa</span></div>
+    <div class="aux num" id="aEt"></div>
+  </div>
+  <div class="card metric" id="mCo2">
+    <div class="label"><span class="dot" style="background:var(--co2)"></span>CO₂</div>
+    <div><span class="value num" id="vCo2">--</span><span class="unit">kPa</span></div>
+    <div class="aux num" id="aCo2"></div>
+  </div>
+  <div class="card metric" id="mRr">
+    <div class="label"><span class="dot" style="background:var(--muted)"></span>Resp. rate</div>
+    <div><span class="value num" id="vRr">--</span><span class="unit">/min</span></div>
+    <div class="aux num" id="aRr"></div>
+  </div>
+  <div class="card metric" id="mO2">
+    <div class="label"><span class="dot" style="background:var(--o2)"></span>O₂</div>
+    <div><span class="value num" id="vO2">--</span><span class="unit">%</span></div>
+    <div class="aux num" id="aO2"></div>
+  </div>
+  <div class="card metric" id="mVol">
+    <div class="label"><span class="dot" style="background:var(--vol)"></span>Volume</div>
+    <div><span class="value num" id="vVol">--</span><span class="unit" id="uVol">mL</span></div>
+    <div class="aux num" id="aVol"></div>
+  </div>
+</section>
+
+<section class="charts">
+  <div class="card chart wide">
+    <div class="head"><span class="title">CO₂ waveform</span><span style="color:var(--muted);font-size:13px">kPa</span>
+      <span class="now">Window&nbsp;
+        <select id="win" style="min-width:0;padding:4px 8px;font-size:13px">
+          <option value="30">30 s</option><option value="60" selected>1 min</option>
+          <option value="120">2 min</option><option value="300">5 min</option>
+        </select></span>
+    </div>
+    <canvas id="cCo2"></canvas>
+  </div>
+  <div class="card chart">
+    <div class="head"><span class="title">O₂</span><span style="color:var(--muted);font-size:13px">%</span></div>
+    <canvas id="cO2"></canvas>
+  </div>
+  <div class="card chart">
+    <div class="head"><span class="title">Volume</span><span style="color:var(--muted);font-size:13px" id="uVolChart">mL</span></div>
+    <canvas id="cVol"></canvas>
+  </div>
+</section>
+
+<section class="bottom">
+  <div class="card panel">
+    <h2>Analyser control</h2>
+    <div class="row">
+      <button id="pumpBtn" disabled>▶ Start pump</button>
+      <button id="zeroBtn" disabled>◎ Zero calibration</button>
+    </div>
+    <div class="hint">Zero calibration only with <b>room air</b> in the sample line, never with breath.<br>
+      The output format (LabVIEW / ASCII) is switched with the BOOT button on the device.</div>
+  </div>
+  <div class="card panel">
+    <h2>Recording</h2>
+    <div class="row">
+      <span class="rec" id="recState"><span class="dot"></span><span id="recText">Idle</span></span>
+      <span class="recinfo"><b id="recCount" class="num">0</b> samples · <b id="recDur" class="num">0:00</b></span>
+      <span style="flex:1"></span>
+      <button id="recBtn">⏸ Pause</button>
+      <button id="clearBtn" class="danger">Clear</button>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="field">
+        <label for="csvStyle">CSV style</label>
+        <select id="csvStyle">
+          <option value="std" selected>Standard ( , and . )</option>
+          <option value="se">Swedish Excel ( ; and , )</option>
+        </select>
+      </div>
+      <span style="flex:1"></span>
+      <button class="primary" id="saveBtn" disabled>⤓ Save CSV</button>
+    </div>
+    <div class="hint">Everything received while connected is recorded (no 2-minute limit). CO₂ values are saved in kPa.</div>
+  </div>
+</section>
+
+<section class="card connect">
+  <div class="field">
+    <label for="port">Serial port</label>
+    <select id="port"><option value="">— no port selected —</option></select>
+  </div>
+  <button id="addPort" title="Let the browser show all serial ports">Add port…</button>
+  <div class="field">
+    <label for="baud">Baud rate</label>
+    <select id="baud">
+      <option>9600</option><option>57600</option><option selected>115200</option><option>230400</option><option>921600</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="fmt">Data format</label>
+    <select id="fmt">
+      <option value="auto" selected>Auto-detect</option>
+      <option value="labview">LabVIEW (binary frames)</option>
+      <option value="ascii">ASCII (tab-separated)</option>
+    </select>
+  </div>
+  <button class="primary" id="connectBtn">Connect selection</button>
+  <div class="stats">
+    <span>Format: <b id="stFmt">—</b></span>
+    <span>Rate: <b id="stRate" class="num">0</b> /s</span>
+    <span>Frames: <b id="stFrames" class="num">0</b></span>
+    <span>Errors: <b id="stErr" class="num">0</b></span>
+  </div>
+</section>
+
+<details class="card log">
+  <summary>Device messages &amp; connection log</summary>
+  <pre id="log"></pre>
+</details>
+
+<footer>Runs locally in the browser · no data leaves this computer</footer>
+
+<script>
+'use strict';
+
+// ==== PARSER START ====
+// Parses the monitor's USB stream. Two formats:
+//  LabVIEW: 24-byte frames  <ESC>AAA\tBBBBB\tCCCCC\t s1 s2 RR fi et \r\n
+//           AAA = CO2 mmHg, BBBBB = O2 x10, CCCCC = volume ADC (0-1023),
+//           binary bytes with zero replacement (s2 0->128, others 0->255), CO2 bytes in mmHg
+//  ASCII:   CO2_kPa\tO2%\tRR\tVolume_mL\tStatus1\tStatus2\r\n ; lines starting with '#' are messages
+const MMHG_TO_KPA = 0.133322;
+
+class StreamParser {
+  constructor(onFrame, onText) {
+    this.onFrame = onFrame;
+    this.onText = onText;
+    this.buf = new Uint8Array(0);
+    this.mode = 'auto';       // 'auto' | 'labview' | 'ascii'
+    this.errors = 0;
+  }
+
+  push(chunk) {
+    const merged = new Uint8Array(this.buf.length + chunk.length);
+    merged.set(this.buf, 0);
+    merged.set(chunk, this.buf.length);
+    this.buf = merged;
+    this.process();
+  }
+
+  static field(b, start, len) {
+    let s = '';
+    for (let k = 0; k < len; k++) s += String.fromCharCode(b[start + k]);
+    return /^-?\d+$/.test(s) ? parseInt(s, 10) : NaN;
+  }
+
+  static tryLabview(b, i) {
+    if (b[i + 4] !== 9 || b[i + 10] !== 9 || b[i + 16] !== 9 || b[i + 22] !== 13 || b[i + 23] !== 10) return null;
+    const co2 = StreamParser.field(b, i + 1, 3);
+    const o2 = StreamParser.field(b, i + 5, 5);
+    const vol = StreamParser.field(b, i + 11, 5);
+    if (isNaN(co2) || isNaN(o2) || isNaN(vol)) return null;
+    const s1 = b[i + 17], s2 = b[i + 18], rr = b[i + 19], fi = b[i + 20], et = b[i + 21];
+    return {
+      format: 'labview',
+      co2: co2 * MMHG_TO_KPA,
+      et: (et === 255 ? 0 : et) * MMHG_TO_KPA,
+      fi: (fi === 255 ? 0 : fi) * MMHG_TO_KPA,
+      rr: rr === 255 ? 0 : rr,
+      o2: o2 / 10,
+      vol: vol, volUnit: 'ADC',
+      s1: s1, s2: s2 === 128 ? 0 : s2,
+    };
+  }
+
+  static tryAscii(line) {
+    const p = line.split('\t');
+    if (p.length !== 6) return null;
+    const n = p.map(Number);
+    if (n.some(x => !isFinite(x)) || p.some(x => x.trim() === '')) return null;
+    return { format: 'ascii', co2: n[0], et: null, fi: null, rr: n[2], o2: n[1],
+             vol: n[3], volUnit: 'mL', s1: n[4], s2: n[5] };
+  }
+
+  handleLine(bytes) {
+    let s = '';
+    for (const c of bytes) s += String.fromCharCode(c);
+    s = s.replace(/\r$/, '');
+    if (s.length === 0) return;
+    if (s[0] === '#') { this.onText(s); return; }
+    if (this.mode !== 'labview') {
+      const f = StreamParser.tryAscii(s);
+      if (f) { this.onFrame(f); return; }
+    }
+    if (/^[\x20-\x7e\t]+$/.test(s)) this.onText(s);   // printable text (e.g. boot log)
+    else this.errors++;                               // binary junk (e.g. partial frame)
+  }
+
+  process() {
+    const b = this.buf;
+    let i = 0;
+    while (i < b.length) {
+      if (b[i] === 0x1B && this.mode !== 'ascii') {
+        if (b.length - i < 24) break;                 // wait for the rest of the frame
+        const f = StreamParser.tryLabview(b, i);
+        if (f) { this.onFrame(f); i += 24; continue; }
+        this.errors++; i++;                           // not a frame start: resync
+        continue;
+      }
+      // Text line: runs up to LF (or up to the next ESC in LabVIEW/auto mode)
+      let j = i;
+      while (j < b.length && b[j] !== 10 && !(b[j] === 0x1B && this.mode !== 'ascii')) j++;
+      if (j >= b.length) {
+        if (b.length - i > 1024) { this.errors++; i = b.length; }   // runaway garbage
+        break;
+      }
+      if (b[j] === 0x1B) { if (j > i) this.errors++; i = j; continue; }
+      this.handleLine(b.subarray(i, j));
+      i = j + 1;
+    }
+    this.buf = b.slice(i);
+  }
+}
+
+// End-tidal tracker for the ASCII format (same algorithm as the firmware)
+class EtTracker {
+  constructor() { this.peak = 0; this.last = 0; this.prev = 0; }
+  push(v) {
+    if (v > this.peak) this.peak = v;
+    if (this.peak > 5 * MMHG_TO_KPA && v < this.peak / 4 && this.prev > v) { this.last = this.peak; this.peak = v; }
+    this.prev = v;
+    return this.last;
+  }
+}
+// ==== PARSER END ====
+
+// ---------------------------------------------------------------- helpers
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('eaglehagen.' + k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('eaglehagen.' + k, v); } catch (e) {} },
+};
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function rgba(hex, a) {
+  const h = hex.replace('#', '');
+  const n = parseInt(h.length === 3 ? h.split('').map(c => c + c).join('') : h, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+function fmtDur(ms) {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(r).padStart(2, '0');
+}
+const logLines = [];
+function log(msg) {
+  const t = new Date().toLocaleTimeString();
+  logLines.push(`[${t}] ${msg}`);
+  if (logLines.length > 400) logLines.splice(0, logLines.length - 400);
+  const el = $('log');
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+  el.textContent = logLines.join('\n');
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+// ---------------------------------------------------------------- theme
+function applyTheme(t) { document.documentElement.dataset.theme = t; store.set('theme', t); }
+applyTheme(store.get('theme', 'dark'));
+$('themeBtn').onclick = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+// ---------------------------------------------------------------- strip chart
+class StripChart {
+  constructor(canvas, opt) {
+    this.c = canvas; this.ctx = canvas.getContext('2d'); this.o = opt;
+    new ResizeObserver(() => this.resize()).observe(canvas);
+    this.resize();
+  }
+  resize() {
+    const r = this.c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    this.w = r.width; this.h = r.height; this.dpr = d;
+    this.c.width = Math.max(1, Math.round(r.width * d));
+    this.c.height = Math.max(1, Math.round(r.height * d));
+  }
+  static niceStep(span) {
+    const raw = span / 4, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+  }
+  draw(t, v, now, winSec) {
+    const ctx = this.ctx, o = this.o;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, this.w, this.h);
+    const padL = 46, padR = 12, padT = 8, padB = 22;
+    const W = this.w - padL - padR, H = this.h - padT - padB;
+    if (W < 10 || H < 10) return;
+    const t0 = now - winSec * 1000;
+
+    let first = t.length;
+    while (first > 0 && t[first - 1] >= t0 - 1000) first--;
+    let lo = Infinity, hi = -Infinity;
+    for (let k = first; k < t.length; k++) { const y = v[k]; if (y < lo) lo = y; if (y > hi) hi = y; }
+    if (!isFinite(lo)) { lo = o.min ?? 0; hi = o.defaultMax; }
+    if (o.min !== undefined) lo = Math.min(lo, o.min);
+    if (hi - lo < o.minSpan) { const mid = o.min !== undefined ? lo + o.minSpan / 2 : (hi + lo) / 2; lo = o.min !== undefined ? lo : mid - o.minSpan / 2; hi = lo + o.minSpan; }
+    const step = StripChart.niceStep(hi - lo);
+    lo = o.min !== undefined ? o.min : Math.floor(lo / step) * step;
+    hi = Math.ceil((hi + (hi - lo) * 0.06) / step) * step;
+
+    const X = tt => padL + W * (tt - t0) / (winSec * 1000);
+    const Y = vv => padT + H * (1 - (vv - lo) / (hi - lo));
+    const grid = cssVar('--grid'), muted = cssVar('--muted'), color = cssVar(o.color);
+
+    ctx.font = '11px "Segoe UI", system-ui, sans-serif';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = muted; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    const dec = step < 1 ? (step < 0.1 ? 2 : 1) : 0;
+    for (let val = lo; val <= hi + 1e-9; val += step) {
+      const y = Math.round(Y(val)) + 0.5;
+      ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + W, y); ctx.stroke();
+      ctx.fillText(val.toFixed(dec), padL - 7, y);
+    }
+    const tStep = winSec <= 30 ? 5 : winSec <= 60 ? 10 : winSec <= 120 ? 20 : 60;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let s = 0; s <= winSec; s += tStep) {
+      const x = Math.round(padL + W * (1 - s / winSec)) + 0.5;
+      ctx.strokeStyle = grid; ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + H); ctx.stroke();
+      ctx.fillText(s === 0 ? 'now' : `−${s}s`, x, padT + H + 5);
+    }
+    if (first >= t.length) return;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(padL, padT, W, H); ctx.clip();
+    ctx.beginPath();
+    for (let k = first; k < t.length; k++) {
+      const x = X(t[k]), y = Y(v[k]);
+      if (k === first) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    const lastX = X(t[t.length - 1]);
+    ctx.lineJoin = 'round'; ctx.lineWidth = o.width || 2; ctx.strokeStyle = color; ctx.stroke();
+    if (o.fill) {
+      ctx.lineTo(lastX, padT + H); ctx.lineTo(X(t[first]), padT + H); ctx.closePath();
+      const g = ctx.createLinearGradient(0, padT, 0, padT + H);
+      g.addColorStop(0, rgba(color, 0.32)); g.addColorStop(1, rgba(color, 0.0));
+      ctx.fillStyle = g; ctx.fill();
+    }
+    ctx.beginPath(); ctx.arc(lastX, Y(v[v.length - 1]), 3.5, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+    ctx.restore();
+  }
+}
+
+const charts = {
+  co2: new StripChart($('cCo2'), { color: '--co2', min: 0, minSpan: 1, defaultMax: 6, fill: true, width: 2.2 }),
+  o2:  new StripChart($('cO2'),  { color: '--o2', minSpan: 2, defaultMax: 25, fill: true }),
+  vol: new StripChart($('cVol'), { color: '--vol', minSpan: 20, defaultMax: 500, fill: true }),
+};
+const series = { t: [], co2: [], o2: [], vol: [] };
+const SERIES_KEEP_MS = 300000;
+
+// ---------------------------------------------------------------- state
+let port = null, reader = null, readDone = null, keepReading = false, demoTimer = null;
+let frames = 0, rateCount = 0, lastFrameAt = 0, volUnit = 'mL', detected = null;
+let recording = true, rec = [], recStart = null;
+const etTracker = new EtTracker();
+
+const parser = new StreamParser(onFrame, txt => log('device: ' + txt));
+
+function onFrame(f) {
+  const now = Date.now();
+  if (f.et === null) f.et = etTracker.push(f.co2);
+  frames++; rateCount++; lastFrameAt = now;
+  if (detected !== f.format) { detected = f.format; log('Data format: ' + (f.format === 'labview' ? 'LabVIEW (binary)' : 'ASCII')); }
+  volUnit = f.volUnit;
+
+  series.t.push(now); series.co2.push(f.co2); series.o2.push(f.o2); series.vol.push(f.vol);
+  let drop = 0; while (drop < series.t.length && series.t[drop] < now - SERIES_KEEP_MS) drop++;
+  if (drop > 50) for (const k in series) series[k].splice(0, drop);
+
+  if (recording) {
+    if (recStart === null) recStart = now;
+    rec.push({ ts: now, co2: f.co2, et: f.et, fi: f.fi, rr: f.rr, o2: f.o2,
+               volMl: f.volUnit === 'mL' ? f.vol : null, volAdc: f.volUnit === 'ADC' ? f.vol : null,
+               s1: f.s1, s2: f.s2, format: f.format });
+  }
+  updateValues(f);
+}
+
+function setBadge(id, state) { $(id).className = 'badge' + (state === null ? '' : state ? ' ok' : ' bad'); }
+
+function updateValues(f) {
+  $('vEt').textContent = f.et ? f.et.toFixed(1) : '0.0';
+  $('aEt').textContent = f.et ? `${Math.round(f.et / MMHG_TO_KPA)} mmHg` : 'waiting for first breath';
+  $('vCo2').textContent = f.co2.toFixed(1);
+  $('aCo2').textContent = `${Math.round(f.co2 / MMHG_TO_KPA)} mmHg` + (f.fi !== null ? ` · FiCO₂ ${f.fi.toFixed(1)} kPa` : '');
+  $('vRr').textContent = f.rr;
+  $('aRr').textContent = 'breaths per minute';
+  $('vO2').textContent = f.o2.toFixed(1);
+  $('aO2').textContent = 'oxygen concentration';
+  $('vVol').textContent = Math.round(f.vol);
+  $('uVol').textContent = f.volUnit === 'mL' ? 'mL' : 'counts';
+  $('uVolChart').textContent = f.volUnit === 'mL' ? 'mL' : 'ADC counts';
+  $('aVol').textContent = f.volUnit === 'mL' ? 'volume sensor' : 'raw ADC (LabVIEW format)';
+  setBadge('bValid', f.s1 === 6);
+  setBadge('bPump', (f.s2 & 1) === 0);
+  setBadge('bLeak', (f.s2 & 2) === 0);
+  setBadge('bOccl', (f.s2 & 4) === 0);
+  $('bPump').lastChild.textContent = (f.s2 & 1) === 0 ? 'PUMP' : 'PUMP STOPPED';
+}
+
+// ---------------------------------------------------------------- render loop
+function frameLoop() {
+  const now = Date.now(), win = +$('win').value;
+  charts.co2.draw(series.t, series.co2, now, win);
+  charts.o2.draw(series.t, series.o2, now, win);
+  charts.vol.draw(series.t, series.vol, now, win);
+  requestAnimationFrame(frameLoop);
+}
+requestAnimationFrame(frameLoop);
+
+setInterval(() => {
+  $('stRate').textContent = rateCount; rateCount = 0;
+  $('stFrames').textContent = frames;
+  $('stErr').textContent = parser.errors;
+  $('stFmt').textContent = detected === 'labview' ? 'LabVIEW' : detected === 'ascii' ? 'ASCII' : '—';
+  const live = (port || demoTimer) && Date.now() - lastFrameAt < 2000;
+  const connected = !!(port || demoTimer);
+  document.querySelectorAll('.metric').forEach(m => m.classList.toggle('stale', !live));
+  const pill = $('connPill');
+  pill.className = 'pill' + (demoTimer ? ' demo on' : live ? ' on' : connected ? ' stale' : '');
+  $('connText').textContent = demoTimer ? 'Demo data' : live ? 'Receiving data' : connected ? 'Connected – no data' : 'Not connected';
+  if (!connected) ['bValid', 'bPump', 'bLeak', 'bOccl'].forEach(id => setBadge(id, null));
+  $('recCount').textContent = rec.length;
+  $('recDur').textContent = recStart === null ? '0:00' : fmtDur((rec.length ? rec[rec.length - 1].ts : recStart) - recStart);
+  $('recState').className = 'rec' + (recording && connected ? ' on' : '');
+  $('recText').textContent = !connected ? 'Idle' : recording ? 'Recording' : 'Paused';
+  $('saveBtn').disabled = rec.length === 0;
+}, 1000);
+
+// ---------------------------------------------------------------- serial ports
+const hasSerial = 'serial' in navigator;
+if (!hasSerial) { $('noSerial').style.display = 'block'; $('addPort').disabled = true; $('connectBtn').disabled = true; }
+
+let knownPorts = [];
+function portLabel(p, idx) {
+  const i = p.getInfo();
+  if (i.usbVendorId === undefined) return `Serial port ${idx + 1}`;
+  const vid = i.usbVendorId.toString(16).padStart(4, '0').toUpperCase();
+  const pid = i.usbProductId.toString(16).padStart(4, '0').toUpperCase();
+  const name = i.usbVendorId === 0x303A ? 'Eaglehagen monitor (ESP32-S3)' : 'USB serial device';
+  return `${name} · ${vid}:${pid}` + (knownPorts.length > 1 ? ` #${idx + 1}` : '');
+}
+async function refreshPorts(selectPort) {
+  if (!hasSerial) return;
+  knownPorts = await navigator.serial.getPorts();
+  const sel = $('port'), prev = selectPort ? null : sel.value;
+  sel.innerHTML = '';
+  if (knownPorts.length === 0) {
+    sel.innerHTML = '<option value="">— click “Add port…” —</option>';
+  }
+  knownPorts.forEach((p, idx) => {
+    const opt = document.createElement('option');
+    opt.value = String(idx); opt.textContent = portLabel(p, idx);
+    sel.appendChild(opt);
+  });
+  if (selectPort) sel.value = String(knownPorts.indexOf(selectPort));
+  else if (prev && +prev < knownPorts.length) sel.value = prev;
+  else {
+    const esp = knownPorts.findIndex(p => p.getInfo().usbVendorId === 0x303A);
+    if (esp >= 0) sel.value = String(esp);
+  }
+}
+if (hasSerial) {
+  navigator.serial.addEventListener('connect', () => { log('A serial device was plugged in'); refreshPorts(); });
+  navigator.serial.addEventListener('disconnect', e => {
+    log('A serial device was unplugged');
+    if (port && e.target === port) disconnect(true);
+    refreshPorts();
+  });
+  refreshPorts();
+}
+
+$('addPort').onclick = async () => {
+  try {
+    const p = await navigator.serial.requestPort();
+    await refreshPorts(p);
+    log('Port added: ' + portLabel(p, knownPorts.indexOf(p)));
+  } catch (e) { if (e.name !== 'NotFoundError') log('Add port: ' + e.message); }
+};
+
+$('fmt').onchange = () => { parser.mode = $('fmt').value; };
+$('baud').value = store.get('baud', '115200');
+$('baud').onchange = () => store.set('baud', $('baud').value);
+
+async function connect() {
+  const sel = $('port').value;
+  if (sel === '') { $('addPort').click(); return; }
+  const p = knownPorts[+sel];
+  const baud = +$('baud').value;
+  try {
+    await p.open({ baudRate: baud, bufferSize: 65536 });
+  } catch (e) {
+    log('Could not open port: ' + e.message + ' (is another program, e.g. LabVIEW or a serial monitor, using it?)');
+    alert('Could not open the port.\n\n' + e.message + '\n\nClose other programs that use this port (LabVIEW, serial monitor) and try again.');
+    return;
+  }
+  port = p; keepReading = true; parser.mode = $('fmt').value;
+  lastFrameAt = 0; detected = null;
+  log(`Connected to ${portLabel(p, +sel)} at ${baud} baud`);
+  setConnectedUi(true);
+  readDone = readLoop();
+}
+
+async function readLoop() {
+  while (port && port.readable && keepReading) {
+    reader = port.readable.getReader();
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) parser.push(value);
+      }
+    } catch (e) {
+      if (keepReading) log('Read error: ' + e.message);
+      if (e.name === 'NetworkError') keepReading = false;   // device lost
+    } finally {
+      try { reader.releaseLock(); } catch (e) {}
+      reader = null;
+    }
+  }
+}
+
+async function disconnect(lost) {
+  if (!port) return;
+  keepReading = false;
+  try { if (reader) await reader.cancel(); } catch (e) {}
+  try { await readDone; } catch (e) {}
+  try { await port.close(); } catch (e) {}
+  port = null;
+  log(lost ? 'Connection lost (device unplugged)' : 'Disconnected');
+  setConnectedUi(false);
+}
+
+function setConnectedUi(on) {
+  $('connectBtn').textContent = on ? 'Disconnect' : 'Connect selection';
+  $('connectBtn').classList.toggle('primary', !on);
+  $('connectBtn').classList.toggle('danger', on);
+  ['port', 'baud', 'addPort'].forEach(id => $(id).disabled = on);
+  $('pumpBtn').disabled = !on; $('zeroBtn').disabled = !on;
+}
+
+$('connectBtn').onclick = () => (port || demoTimer) ? (demoTimer ? stopDemo() : disconnect(false)) : connect();
+
+async function sendByte(b, what) {
+  if (demoTimer) { log(`(demo) would send ${what} 0x${b.toString(16).toUpperCase()}`); return; }
+  if (!port || !port.writable) return;
+  const w = port.writable.getWriter();
+  try { await w.write(new Uint8Array([b])); log(`Sent ${what} (0x${b.toString(16).toUpperCase()})`); }
+  catch (e) { log('Send failed: ' + e.message); }
+  finally { w.releaseLock(); }
+}
+$('pumpBtn').onclick = () => sendByte(0xA5, 'Start pump');
+$('zeroBtn').onclick = () => {
+  if (confirm('Zero calibration\n\nMake sure the sample line is in ROOM AIR (no breath).\n\nContinue?')) sendByte(0x5A, 'Zero calibration');
+};
+
+// ---------------------------------------------------------------- recording / CSV
+$('recBtn').onclick = () => {
+  recording = !recording;
+  $('recBtn').textContent = recording ? '⏸ Pause' : '● Resume';
+};
+$('clearBtn').onclick = () => {
+  if (rec.length && !confirm(`Clear ${rec.length} recorded samples?`)) return;
+  rec = []; recStart = null;
+};
+
+function buildCsv(style) {
+  const sep = style === 'se' ? ';' : ',';
+  const num = (x, d) => x === null || x === undefined ? '' : (style === 'se' ? x.toFixed(d).replace('.', ',') : x.toFixed(d));
+  const head = ['Timestamp', 'Elapsed(s)', 'CO2_Waveform(kPa)', 'FetCO2(kPa)', 'FiCO2(kPa)', 'RR(bpm)', 'O2(%)',
+                'Volume(mL)', 'Volume(ADC)', 'Pump_Running', 'Leak_Detected', 'Occlusion_Detected', 'Status1', 'Status2', 'Format'];
+  const lines = [head.join(sep)];
+  const t0 = rec.length ? rec[0].ts : 0;
+  for (const r of rec) {
+    lines.push([
+      new Date(r.ts).toISOString(), num((r.ts - t0) / 1000, 3), num(r.co2, 2), num(r.et, 2), num(r.fi, 2),
+      r.rr, num(r.o2, 1), num(r.volMl, 1), r.volAdc === null ? '' : r.volAdc,
+      (r.s2 & 1) === 0, (r.s2 & 2) !== 0, (r.s2 & 4) !== 0, r.s1, r.s2, r.format,
+    ].join(sep));
+  }
+  return lines.join('\r\n') + '\r\n';
+}
+
+$('saveBtn').onclick = async () => {
+  if (!rec.length) return;
+  const style = $('csvStyle').value;
+  store.set('csvStyle', style);
+  const csv = (style === 'se' ? '﻿' : '') + buildCsv(style);
+  const d = new Date(rec[0].ts), pad = n => String(n).padStart(2, '0');
+  const name = `eaglehagen_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}.csv`;
+  const blob = new Blob([csv], { type: 'text/csv' });
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: 'CSV file', accept: { 'text/csv': ['.csv'] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      log(`Saved ${rec.length} samples to ${h.name}`);
+      return;
+    } catch (e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  log(`Saved ${rec.length} samples (${name})`);
+};
+$('csvStyle').value = store.get('csvStyle', 'std');
+
+// ---------------------------------------------------------------- demo mode (open with #demo)
+function demoFrame(t) {
+  const period = 4.0, ph = (t % period) / period;
+  let co2 = 0;
+  if (ph > 0.40 && ph <= 0.50) co2 = 36 * (ph - 0.40) / 0.10;
+  else if (ph > 0.50 && ph <= 0.90) co2 = 36 + 4 * (ph - 0.50) / 0.40;
+  else if (ph > 0.90 && ph <= 0.95) co2 = 40 * (1 - (ph - 0.90) / 0.05);
+  const o2 = Math.round(209 + Math.sin(t / 7) * 3 + (Math.random() - 0.5) * 2);
+  const vol = Math.round(330 + 90 * Math.sin(2 * Math.PI * ph));
+  const head = '\x1b' + String(Math.round(co2)).padStart(3, '0') + '\t' + String(o2).padStart(5, '0') + '\t' + String(vol).padStart(5, '0') + '\t';
+  const bytes = new Uint8Array(24);
+  for (let k = 0; k < 17; k++) bytes[k] = head.charCodeAt(k);
+  bytes.set([6, 128, 15, 255, 40, 13, 10], 17);
+  return bytes;
+}
+function startDemo() {
+  const t0 = Date.now();
+  parser.mode = 'auto';
+  demoTimer = setInterval(() => parser.push(demoFrame((Date.now() - t0) / 1000)), 120);
+  setConnectedUi(true);
+  log('Demo mode: synthetic LabVIEW frames');
+}
+function stopDemo() { clearInterval(demoTimer); demoTimer = null; setConnectedUi(false); log('Demo stopped'); }
+if (location.hash === '#demo') startDemo();
+</script>
+</body>
+</html>

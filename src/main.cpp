@@ -200,7 +200,7 @@ void loop() {
     }
     
     // -------------------------------------------------------------------------
-    // WiFi/Web Update (2Hz)
+    // WiFi/Web Update (8Hz)
     // -------------------------------------------------------------------------
     if (now - lastWiFiUpdate >= WIFI_UPDATE_INTERVAL_MS) {
         lastWiFiUpdate = now;
@@ -208,9 +208,9 @@ void loop() {
     }
     
     // -------------------------------------------------------------------------
-    // Host Output (8Hz) - Legacy LabVIEW or Tab-Separated format
+    // Host Output (10Hz) - Legacy LabVIEW or Tab-Separated format
     // -------------------------------------------------------------------------
-    if (now - lastLabViewUpdate >= DATA_UPDATE_INTERVAL_MS) {  // 8Hz same as data rate
+    if (now - lastLabViewUpdate >= DATA_UPDATE_INTERVAL_MS) {  // 10Hz, same as data acquisition
         lastLabViewUpdate = now;
 
         if (currentData.valid) {
