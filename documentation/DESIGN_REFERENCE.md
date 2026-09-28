@@ -113,8 +113,8 @@ New:  MaCO2 TX → ESP32 UART1 RX (level shifted);  ESP32 UART1 TX → MaCO2 RX;
 | GPIO 18 | UART1 RX ← MaCO2 TX | 9600 8N1, **via level shifter** |
 | GPIO 1 | ADC — O₂ sensor | 12-bit, 11 dB attenuation |
 | GPIO 2 | ADC — Volume sensor | 12-bit, internal weak pull-down enabled |
-| GPIO 14 | Button — pump start | INPUT_PULLUP, interrupt driven |
-| GPIO 0 | Button — output-format toggle (BOOT) | INPUT_PULLUP, interrupt driven; strapping pin |
+| GPIO 14 | Button — pump start, labelled **"Restart pump"** | INPUT_PULLUP, interrupt driven |
+| GPIO 0 | Button — output-format toggle (BOOT), labelled **"Select output"** | INPUT_PULLUP, interrupt driven; strapping pin |
 | GPIO 15 | TFT/peripheral power enable | OUTPUT, driven HIGH at start |
 | GPIO 38 | TFT backlight | Handled by TFT_eSPI |
 | GPIO 5–8 (+ data bus) | TFT parallel interface (RST=5, CS=6, DC=7, WR=8) | Pre-wired on the board |
@@ -172,6 +172,19 @@ This is simple and reliable at 9600 baud.
 | Protoboard/PCB | — | 1 | |
 
 Estimated cost about USD 25–30, excluding sensors.
+
+### 2.7 Enclosure, photos and mechanical CAD
+
+The monitor is built into a black, 3D-printed enclosure with a hinged lid.
+
+**Photos** ([Images/](Images/)):
+
+| Photo | Shows |
+|---|---|
+| [IMG_1770.jpg](Images/IMG_1770.jpg) | The closed unit from the front: "Örnhagens monitor" label, display window with the LCD, the water trap mounted on the side, the USB-C cable, and the two labelled push buttons **"Restart pump"** (GPIO14) and **"Select output"** (GPIO0/BOOT). |
+| [IMG_1771.jpg](Images/IMG_1771.jpg) | The unit opened: analyser electronics and pneumatic tubing in the base, and the LilyGO T-Display S3 with the interface electronics mounted in the lid, connected by a ribbon cable. |
+
+**Mechanical CAD:** [Mech CAD/EagleHagen_Gas_analyzer.f3z](Mech%20CAD/EagleHagen_Gas_analyzer.f3z) is the enclosure model as an Autodesk Fusion 360 archive. Open it in Fusion 360 with *File → Open → Open from my computer…*. The `.f3z` format keeps the design and its referenced components together in one file.
 
 ---
 

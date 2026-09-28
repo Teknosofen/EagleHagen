@@ -8,7 +8,11 @@ This guide explains how to use the monitor day to day. For wiring, firmware and 
 
 ## 1. What the device does
 
-The Eaglehagen monitor connects to a **MedAir MaCO2-V3** side-stream CO₂ analyser, an **O₂ sensor** and a **volume sensor**. It shows the readings in three places:
+The Eaglehagen monitor connects to a **MedAir MaCO2-V3** side-stream CO₂ analyser, an **O₂ sensor** and a **volume sensor**, all built into one enclosure (photos: [outside](documentation/Images/IMG_1770.jpg), [inside](documentation/Images/IMG_1771.jpg)).
+
+<img src="documentation/Images/IMG_1770.jpg" alt="The Örnhagens monitor: display, Restart pump and Select output buttons, water trap on the right" width="560">
+
+It shows the readings in three places:
 
 | Where | What you get |
 |---|---|
@@ -27,7 +31,7 @@ All three can be used at the same time. No internet connection is needed.
    `Teknosofen – Initializing…` → `Teknosofen – Connecting sensor…` → `Ready! IP: 192.168.4.1` → main screen.
 3. On your phone or tablet, join the WiFi network **`EAGLEHAGEN`**. There is **no password**.
 4. Open a browser and go to **`http://eaglehagen.local`** (or **`http://192.168.4.1`**, which always works)
-5. If the **PUMP** badge is red, press the **pump button (IO14)** on the device or tap **Start Pump** on the web page.
+5. If the **PUMP** badge is red, press the **Restart pump** button on the device or tap **Start Pump** on the web page.
 
 That's it. The readings update live.
 
@@ -57,7 +61,7 @@ That's it. The readings update live.
 
 | Badge | Red means | What to do |
 |---|---|---|
-| **PUMP** | The analyser's sample pump is stopped | Press the pump button (IO14) or **Start Pump** on the web page |
+| **PUMP** | The analyser's sample pump is stopped | Press **Restart pump** on the device or **Start Pump** on the web page |
 | **LEAK** | Leak in the sample line | Check the sample line and its connections |
 | **OCCL** | Sample line blocked (occlusion) | Check for kinks, water or a saturated water trap. Then restart the pump. |
 
@@ -65,14 +69,14 @@ That's it. The readings update live.
 
 ## 4. Physical buttons
 
-The LilyGO board has two push buttons.
+The monitor has two push buttons below the display, labelled on the enclosure. See the photo [documentation/Images/IMG_1770.jpg](documentation/Images/IMG_1770.jpg).
 
 | Button | Action |
 |---|---|
-| **IO14** (pump button) | Sends **Start Pump** to the CO₂ analyser. Use it after an occlusion or whenever the PUMP badge is red. |
-| **BOOT** (GPIO0) | Switches the **USB output format** between **LabVIEW** and **ASCII**. The `Out:` line on the screen shows the current format. |
+| **Restart pump** | Sends **Start Pump** to the CO₂ analyser. Use it after an occlusion or whenever the PUMP badge is red. |
+| **Select output** | Switches the **USB output format** between **LabVIEW** and **ASCII**. The `Out:` line on the screen shows the current format. |
 
-> ⚠️ Don't hold the **BOOT** button while powering up or resetting the device. That puts the board into firmware-download mode, and the monitor won't start. If this happens, power-cycle without pressing it.
+> ⚠️ Don't hold **Select output** while powering up or resetting the device. It doubles as the board's BOOT button, so holding it puts the board into firmware-download mode and the monitor won't start. If this happens, power-cycle without pressing it.
 
 ---
 
@@ -108,7 +112,7 @@ Open `http://eaglehagen.local` or `http://192.168.4.1` while connected to `EAGLE
 | **Save Data (JSON)** | Downloads the same data with metadata (for Python/MATLAB) |
 | **Clear Data** | Empties the recording and resets the charts |
 
-**USB Host Output Format:** shows and selects the USB output format. It always reflects the device's current setting, including changes made with the BOOT button.
+**USB Host Output Format:** shows and selects the USB output format. It always reflects the device's current setting, including changes made with the **Select output** button.
 
 **PC monitor page (USB):** the **Download** button at the bottom saves the stand-alone PC monitor page (`Eaglehagen_Serial_Monitor.html`) to the computer you're browsing from. See section 7.
 
@@ -133,7 +137,7 @@ For longer recordings, use the PC monitor page over USB (section 7): it records 
 3. Open the port with **115200 baud, 8 data bits, no parity, 1 stop bit, no flow control**.
 4. Data arrives about **10 times per second** whenever the sensor delivers valid data.
 
-### Output formats (toggle with the BOOT button or the web page)
+### Output formats (toggle with the Select output button or the web page)
 
 **LabVIEW (default at power-up):** the format of the original PIC-based system, a mix of text and binary bytes. It's meant for the existing LabVIEW program.
 
@@ -167,7 +171,7 @@ All other bytes are ignored.
 
 The monitor itself carries a copy of the page, so you don't need any other files. You can also find it in this project as [tools/Eaglehagen_Serial_Monitor.html](tools/Eaglehagen_Serial_Monitor.html).
 
-> **Both output formats work.** The page reads the **LabVIEW** format and the **ASCII** format, and detects which one is arriving by itself. You don't need to press BOOT before using it. If someone presses BOOT while you are connected, the page follows the switch without reconnecting.
+> **Both output formats work.** The page reads the **LabVIEW** format and the **ASCII** format, and detects which one is arriving by itself. You don't need to press **Select output** before using it. If someone presses it while you are connected, the page follows the switch without reconnecting.
 
 ### Step 1: Get the page over WiFi (once per PC)
 
@@ -247,10 +251,10 @@ What differs between the two formats:
 | `eaglehagen.local` not found | Use `http://192.168.4.1` instead. Some Android devices and VPN apps don't resolve `.local` names. |
 | Page shows "Connecting…" | The device restarted or is out of range. The page reconnects by itself. |
 | PC receives no data | Data-capable USB cable? Correct COM port? No other program (e.g. a serial monitor) holding the port? |
-| LabVIEW gets garbled data | The format may be set to ASCII. Press BOOT until the screen shows `Out: LabVIEW`. |
+| LabVIEW gets garbled data | The format may be set to ASCII. Press **Select output** until the screen shows `Out: LabVIEW`. |
 | PC monitor page can't connect | Close LabVIEW or other programs using the COM port. Use Chrome or Edge. |
 | PC monitor page says the browser can't open serial ports | You opened it from the WiFi address, or in another browser. Download it, then open the saved file in Chrome or Edge. |
-| Device doesn't start after pressing BOOT | It's in download mode. Power-cycle without holding BOOT. |
+| Device doesn't start after pressing Select output | It was held during power-up and started in download mode. Power-cycle without holding it. |
 
 ---
 
@@ -261,8 +265,8 @@ What differs between the two formats:
 | WiFi network | `EAGLEHAGEN` (no password) |
 | Web address | `http://eaglehagen.local` or `http://192.168.4.1` |
 | USB serial | 115200 8N1, ~10 lines/s |
-| Pump button | IO14 → Start Pump |
-| BOOT button | Toggle USB format LabVIEW ⇄ ASCII |
+| Restart pump button | Starts the sample pump |
+| Select output button | Toggles USB format LabVIEW ⇄ ASCII |
 | Web recording | Last 2 minutes, export CSV/JSON |
 | Commands over USB | `0xA5` start pump, `0x5A` zero cal |
 | PC monitor page | Download from the web page (WiFi), then open the file in Chrome/Edge; both formats |
