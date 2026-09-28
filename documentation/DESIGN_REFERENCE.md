@@ -4,6 +4,8 @@ This is the single design reference for the Eaglehagen monitor: hardware, sensor
 
 For operating instructions, see [../USER_GUIDE.md](../USER_GUIDE.md).
 
+**Repository:** all documentation, the firmware source and the PC monitor page are in the public repository **https://github.com/Teknosofen/EagleHagen**. The latest version of this document is always there.
+
 Where the older documents contradicted each other, **the current source code (`src/`, `include/`) was taken as the truth**. Superseded statements are listed in [§13](#13-superseded-design-decisions-and-corrections) so the history isn't lost.
 
 ---

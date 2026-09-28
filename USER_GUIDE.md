@@ -2,6 +2,8 @@
 
 This guide explains how to use the monitor day to day. For wiring, firmware and protocol details, see [documentation/DESIGN_REFERENCE.md](documentation/DESIGN_REFERENCE.md).
 
+> **All documentation is public** in the project repository: **https://github.com/Teknosofen/EagleHagen**. There you'll find this guide, the design reference, the printable setup handout (`documentation/Eaglehagen_Basic_Setup.pptx`), the PC monitor page (`tools/`) and the firmware source. The latest versions are always there.
+
 ---
 
 ## 1. What the device does
@@ -264,3 +266,4 @@ What differs between the two formats:
 | Web recording | Last 2 minutes, export CSV/JSON |
 | Commands over USB | `0xA5` start pump, `0x5A` zero cal |
 | PC monitor page | Download from the web page (WiFi), then open the file in Chrome/Edge; both formats |
+| Documentation | https://github.com/Teknosofen/EagleHagen |
