@@ -388,7 +388,7 @@ main.cpp  (orchestrator — setup, loop, timing, command routing)
        └─────────────┴──────── main.cpp ─────────┴──────────┘
 ```
 
-**Files:** `src/*.cpp`, headers in `include/` (`MaCO2Parser.h`, `ADCManager.h`, `DisplayManager.h`, `WiFiManager.h`, `DataLogger.h`, `DebugLog.h`, `Button.hpp`, `ChartJS.h`, `TFT_eSPI_Setup.h`, and the generated `MonitorPage.h`). `tools/` holds the PC monitor page and `scripts/` its build-time embedding script (§6.4). The folders `EagleHagen/` and `_older_stuff/` contain earlier code that isn't built.
+**Files:** `src/*.cpp`, headers in `include/` (`MaCO2Parser.h`, `ADCManager.h`, `DisplayManager.h`, `WiFiManager.h`, `DataLogger.h`, `DebugLog.h`, `Button.hpp`, `ChartJS.h`, `TFT_eSPI_Setup.h`, and the generated `MonitorPage.h`). `tools/` holds the PC monitor page and `scripts/` its build-time embedding script (§6.4). Early prototype code (an ESP8266 sketch in `EagleHagen/` and an old parser in `_older_stuff/`) was never part of the build and has been removed. It remains in git history, e.g. `git show 2cba5e9:EagleHagen/GasAnalyzer.cpp`.
 
 ### 5.2 Key interfaces
 
